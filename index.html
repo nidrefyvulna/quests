@@ -33,7 +33,7 @@
         <option value="dlD">Deadline D (terjauh)</option>
       </select>
       <select id="tf" aria-label="Filter tier"></select>
-      <label class="chk2"><input type="checkbox" id="sd" checked> Tampilkan yang sudah selesai</label>
+      <label class="chk2"><input type="checkbox" id="sd" checked> Tampilkan selesai &amp; terjadwal</label>
     </div>
     <div id="list" class="list"></div>
   </section>
@@ -73,6 +73,15 @@
     <label>Type<select name="ty"></select></label>
   </div>
   <label id="evl" hidden>Ulangi tiap berapa hari? (0 = sekali saja)<input name="ev" type="number" min="0" max="3650" value="0" inputmode="numeric"></label>
+  <div class="two">
+    <label>Jadwal muncul<select name="sc"><option value="off">Selalu tampil</option><option value="on">Hari &amp; jam tertentu</option></select></label>
+    <label id="tml" hidden>Jam muncul<input name="tm" type="time" value="08:00"></label>
+  </div>
+  <div id="dys" role="group" aria-label="Hari muncul" hidden>
+    <span class="lbl">Hari muncul</span>
+    <div class="days" id="dchips"></div>
+    <p class="hint">Quest muncul pada hari dan jam ini, lalu muncul lagi di jadwal berikutnya setelah diselesaikan.</p>
+  </div>
   <div class="two">
     <label>Deadline<select name="dk"><option value="none">Tanpa deadline</option><option value="day">1 hari</option><option value="week">1 minggu</option><option value="custom">Custom</option></select></label>
     <label id="dtl" hidden>Tanggal &amp; jam<input name="dt" type="datetime-local"></label>

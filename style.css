@@ -73,3 +73,15 @@ h4{margin:18px 0 4px;font:700 1rem var(--ser)}
 #toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom));transform:translate(-50%,16px);max-width:90vw;padding:10px 16px;border-radius:99px;background:var(--ink);color:var(--bg);font-size:.9rem;opacity:0;pointer-events:none;transition:.2s;z-index:20}
 #toast.on{opacity:1;transform:translate(-50%,0)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* jadwal muncul */
+.lbl{display:block;margin-top:12px;font-size:.85rem;color:var(--mut)}
+.hint{margin:8px 0 0;color:var(--mut);font-size:.8rem}
+.days{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.days label{position:relative;margin:0}
+.days input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+.days span{display:grid;place-items:center;min-width:48px;min-height:44px;padding:0 10px;border:1px solid var(--ln);border-radius:10px;background:var(--sf);color:var(--ink);font-size:.9rem}
+.days input:checked+span{background:var(--btn);color:var(--bon);border-color:transparent;font-weight:700}
+.days input:focus-visible+span{outline:3px solid #3b82f6;outline-offset:2px}
+.row.wait{opacity:.55}.row.wait .chk{visibility:hidden}
+.pri:disabled{opacity:.45;cursor:default}

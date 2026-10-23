@@ -11,13 +11,23 @@ const hue=t=>200-(t-1)*22;               // tier I = biru dingin ... tier X = me
 
 /* ---------- sanitasi data (dipakai saat load & import) ---------- */
 function cleanQ(q,keep){q=q||{};const w=q.dl||{},k=['day','week','custom'].includes(w.k)?w.k:'none',
- at=k!=='none'&&w.at!==null&&Number.isFinite(+w.at)?+w.at:null;
+ sc=cleanS(q.sch),at=k!=='none'&&w.at!==null&&Number.isFinite(+w.at)?+w.at:(k==='day'||k==='week'?dlBase(sc)+(k==='day'?1:7)*DAY:null);
  return{id:sid(q.id)||uid(),name:str(q.name,120)||'Tanpa nama',desc:str(q.desc,1000),tier:num(q.tier,1,10,1),
-  type:TK.includes(q.type)?q.type:'daily',every:num(q.every,0,3650,0),dl:{k:at===null?'none':k,at},
+  type:TK.includes(q.type)?q.type:'daily',every:num(q.every,0,3650,0),dl:{k:at===null?'none':k,at},sch:sc,
   notes:(Array.isArray(q.notes)?q.notes:[]).slice(0,200).map(n=>({id:sid(n&&n.id)||uid(),text:str(n&&n.text,5000),ts:num(n&&n.ts,0,9e15,Date.now())})),
   created:num(q.created,0,9e15,Date.now()),doneAt:keep&&q.doneAt?num(q.doneAt,0,9e15,null):null,doneLog:keep&&q.doneLog?sid(q.doneLog):null}}
 const cleanL=l=>l&&l.at?{id:sid(l.id)||uid(),qid:sid(l.qid),name:str(l.name,120),tier:num(l.tier,1,10,1),
  type:TK.includes(l.type)?l.type:'custom',xp:num(l.xp,0,1e4,10),at:num(l.at,0,9e15,Date.now())}:null;
+
+/* ---------- jadwal muncul (hari & jam tertentu) ---------- */
+function cleanS(s){if(!s||typeof s!=='object')return null;
+ const days=[...new Set((Array.isArray(s.days)?s.days:[]).map(Number).filter(d=>Number.isInteger(d)&&d>=0&&d<=6))].sort();
+ return days.length?{days,time:/^([01]\d|2[0-3]):[0-5]\d$/.test(s.time)?s.time:'08:00',at:num(s.at,0,9e15,Date.now())}:null}
+function nextOcc(s,t){const[h,m]=s.time.split(':').map(Number);   // jadwal pertama setelah waktu t
+ for(let i=0;i<=7;i++){const d=new Date(t);d.setDate(d.getDate()+i);d.setHours(h,m,0,0);
+  if(d.getTime()>t&&s.days.includes(d.getDay()))return d.getTime()}
+ return Infinity}
+const dlBase=s=>{const a=s?nextOcc(s,s.at):0;return a>Date.now()?a:Date.now()};
 
 /* ---------- state ---------- */
 let S={quests:[],log:[]},ui={type:'all',edit:null,d:null,imp:null};
@@ -32,17 +42,22 @@ const fmtD=t=>new Date(t).toLocaleDateString('id-ID',{day:'numeric',month:'short
 const fmtT=t=>new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
 const fmtDT=t=>new Date(t).toLocaleString('id-ID',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
 // kapan quest yang sudah selesai aktif lagi (minggu dimulai hari Senin)
-function resetAt(q){const d=new Date(q.doneAt);d.setHours(0,0,0,0);
+function resetAt(q){if(q.sch)return nextOcc(q.sch,q.doneAt);const d=new Date(q.doneAt);d.setHours(0,0,0,0);
  if(q.type==='daily')return d.setDate(d.getDate()+1);
  if(q.type==='weekly')return d.setDate(d.getDate()+((8-d.getDay())%7||7));
  if(q.type==='monthly')return new Date(d.getFullYear(),d.getMonth()+1,1).getTime();
  return q.every>0?d.setDate(d.getDate()+q.every):Infinity}
 const isDone=q=>!!q.doneAt&&Date.now()<resetAt(q);
-const isOnce=q=>q.type==='custom'&&!(q.every>0);
+const isOnce=q=>!q.sch&&q.type==='custom'&&!(q.every>0);
+const isWaiting=q=>!!q.sch&&!q.doneAt&&nextOcc(q.sch,q.sch.at)>Date.now();   // belum waktunya muncul
+const isActive=q=>!isDone(q)&&!isWaiting(q);
+const DN={0:'Min',1:'Sen',2:'Sel',3:'Rab',4:'Kam',5:'Jum',6:'Sab'};
+const fmtW=t=>new Date(t).toLocaleString('id-ID',{weekday:'short',hour:'2-digit',minute:'2-digit'});
+const schLabel=q=>(q.sch.days.length===7?'Setiap hari':[1,2,3,4,5,6,0].filter(d=>q.sch.days.includes(d)).map(d=>DN[d]).join(', '))+' pukul '+q.sch.time.replace(':','.');
 const typeLabel=q=>TYPES[q.type]+(q.type==='custom'&&q.every>0?' (tiap '+q.every+' hari)':'');
 function refresh(){let ch=false;const n=Date.now();
- S.quests.forEach(q=>{if(q.doneAt&&n>=resetAt(q)){q.doneAt=q.doneLog=null;ch=true;
-  if(q.dl.k==='day'||q.dl.k==='week')q.dl.at=n+(q.dl.k==='day'?1:7)*DAY}});
+ S.quests.forEach(q=>{const r=q.doneAt?resetAt(q):0;if(q.doneAt&&n>=r){q.doneAt=q.doneLog=null;ch=true;
+  if(q.dl.k==='day'||q.dl.k==='week')q.dl.at=(q.sch?r:n)+(q.dl.k==='day'?1:7)*DAY}});
  if(ch)save()}
 function span(ms){const m=Math.round(ms/6e4);if(m<60)return Math.max(m,1)+' mnt';const h=Math.round(m/60);return h<48?h+' jam':Math.round(h/24)+' hari'}
 function dlInfo(q){if(!q.dl.at)return{t:'Tanpa deadline',c:''};const d=q.dl.at-Date.now();
@@ -52,17 +67,17 @@ function dlInfo(q){if(!q.dl.at)return{t:'Tanpa deadline',c:''};const d=q.dl.at-D
 const cmpDl=dir=>(a,b)=>{const x=a.dl.at,y=b.dl.at;if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;return dir*(x-y)};
 const SORTS={tierA:(a,b)=>a.tier-b.tier,tierD:(a,b)=>b.tier-a.tier,dlA:cmpDl(1),dlD:cmpDl(-1)};
 function visible(){const q=$('#q').value.trim().toLowerCase(),tf=$('#tf').value,sd=$('#sd').checked,cmp=SORTS[$('#sort').value];
- return S.quests.filter(x=>(ui.type==='all'||x.type===ui.type)&&(!tf||x.tier==tf)&&(sd||!isDone(x))&&
+ return S.quests.filter(x=>(ui.type==='all'||x.type===ui.type)&&(!tf||x.tier==tf)&&(sd||isActive(x))&&
   (!q||(x.name+' '+x.desc+' '+x.notes.map(n=>n.text).join(' ')).toLowerCase().includes(q)))
-  .sort((a,b)=>isDone(a)-isDone(b)||cmp(a,b)||b.tier-a.tier||a.created-b.created)}
+  .sort((a,b)=>isActive(b)-isActive(a)||cmp(a,b)||b.tier-a.tier||a.created-b.created)}
 
 /* ---------- render ---------- */
-function card(q){const d=isDone(q),i=dlInfo(q);
- return `<article class="row${d?' done':''}" data-id="${q.id}" style="--t:${hue(q.tier)}"><span class="tier" data-act="open">${R[q.tier-1]}</span>
+function card(q){const d=isDone(q),w=isWaiting(q),i=dlInfo(q);
+ return `<article class="row${d?' done':w?' wait':''}" data-id="${q.id}" style="--t:${hue(q.tier)}"><span class="tier" data-act="open">${R[q.tier-1]}</span>
 <div class="body" data-act="open"><h3>${esc(q.name)}</h3>${q.desc?`<p>${esc(q.desc)}</p>`:''}
-<div class="chips"><span class="chip">${typeLabel(q)}</span>${d?`<span class="chip">Selesai ${fmtD(q.doneAt)}</span>`:`<span class="chip ${i.c}">${i.t}</span>`}${d&&!isOnce(q)?`<span class="chip">Aktif lagi ${fmtD(resetAt(q))}</span>`:''}${q.notes.length?`<span class="chip">${q.notes.length} note</span>`:''}</div></div>
+<div class="chips"><span class="chip">${typeLabel(q)}</span>${q.sch?`<span class="chip">${schLabel(q)}</span>`:''}${d?`<span class="chip">Selesai ${fmtD(q.doneAt)}</span>`:w?`<span class="chip">Muncul ${fmtW(nextOcc(q.sch,q.sch.at))}</span>`:`<span class="chip ${i.c}">${i.t}</span>`}${d&&!isOnce(q)?`<span class="chip">Aktif lagi ${q.sch?fmtW(resetAt(q)):fmtD(resetAt(q))}</span>`:''}${q.notes.length?`<span class="chip">${q.notes.length} note</span>`:''}</div></div>
 <button class="chk" data-act="${d?'undo':'done'}" aria-label="${d?'Batalkan selesai':'Tandai selesai'}">${d?'✓':''}</button></article>`}
-function renderTypes(){const n=t=>S.quests.filter(q=>(t==='all'||q.type===t)&&!isDone(q)).length;
+function renderTypes(){const n=t=>S.quests.filter(q=>(t==='all'||q.type===t)&&isActive(q)).length;
  $('#types').innerHTML=[['all','Semua'],...Object.entries(TYPES)].map(([k,l])=>`<button role="tab" data-type="${k}" class="${ui.type===k?'on':''}">${l}<b>${n(k)}</b></button>`).join('')}
 function renderList(){const L=visible();
  $('#list').innerHTML=L.length?L.map(card).join(''):`<div class="empty">${S.quests.length?'Tidak ada quest yang cocok dengan filter.':'Belum ada quest.<br>Tekan + untuk membuat quest pertamamu.'}</div>`}
@@ -73,28 +88,29 @@ function stats(){const xp=S.log.reduce((s,l)=>s+l.xp,0),lv=Math.floor(Math.sqrt(
 function renderLog(){const s=stats();$('#lvl').textContent='Lv '+s.lv;
  $('#stats').innerHTML=`<div class="stat" style="grid-column:1/-1"><b>Level ${s.lv}</b><span>${s.xp} dari ${s.hi} XP menuju level berikutnya</span><div class="bar"><i style="width:${s.pct}%"></i></div></div>
 <div class="stat"><b>${s.today}</b><span>Selesai hari ini</span></div><div class="stat"><b>${s.total}</b><span>Total selesai</span></div>
-<div class="stat"><b>${s.st} hari</b><span>Streak berturut-turut</span></div><div class="stat"><b>${S.quests.filter(q=>!isDone(q)).length}</b><span>Quest aktif</span></div>`;
+<div class="stat"><b>${s.st} hari</b><span>Streak berturut-turut</span></div><div class="stat"><b>${S.quests.filter(isActive).length}</b><span>Quest aktif</span></div>`;
  let h='',last='';[...S.log].sort((a,b)=>b.at-a.at).slice(0,300).forEach(l=>{const k=dkey(l.at);
   if(k!==last){last=k;h+=`<div class="day">${new Date(l.at).toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>`}
   h+=`<div class="le" style="--t:${hue(l.tier)}"><span class="tier">${R[l.tier-1]}</span><div>${esc(l.name)}<br><small>${TYPES[l.type]}, ${fmtT(l.at)}</small></div><em>+${l.xp}</em></div>`});
  $('#loglist').innerHTML=h||'<div class="empty">Belum ada quest yang selesai.<br>Selesaikan quest pertamamu.</div>'}
-function render(){refresh();renderTypes();renderList();renderLog()}
+function render(){refresh();const w=new Set(S.quests.filter(isWaiting).map(q=>q.id)),up=S.quests.filter(q=>ui.w&&ui.w.has(q.id)&&!w.has(q.id));ui.w=w;
+ if(up.length)toast('Quest muncul: '+up.map(q=>q.name).join(', '));renderTypes();renderList();renderLog()}
 function show(t){['quests','log','data'].forEach(k=>$('#v-'+k).hidden=k!==t);
  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.nav===t));$('#fab').hidden=t!=='quests';scrollTo(0,0)}
 let tt;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2600)}
 
 /* ---------- aksi quest ---------- */
-function complete(id){const q=get(id);if(!q||isDone(q))return;
+function complete(id){const q=get(id);if(!q||isDone(q)||isWaiting(q))return;
  const e={id:uid(),qid:q.id,name:q.name,tier:q.tier,type:q.type,xp:q.tier*10,at:Date.now()};
  S.log.push(e);q.doneAt=e.at;q.doneLog=e.id;save();render();toast(`Selesai: ${q.name} (+${e.xp} XP)`)}
 function undo(id){const q=get(id);if(!q)return;S.log=S.log.filter(l=>l.id!==q.doneLog);q.doneAt=q.doneLog=null;save();render()}
 const noteH=n=>`<div class="note" data-nid="${n.id}"><textarea rows="2" placeholder="Tulis catatan…" aria-label="Note">${esc(n.text)}</textarea><button data-act="delnote" aria-label="Hapus note">✕</button><small>Diedit ${fmtDT(n.ts)}</small></div>`;
-function openDetail(id){const q=get(id);if(!q)return;ui.d=id;const d=isDone(q),i=dlInfo(q);
+function openDetail(id){const q=get(id);if(!q)return;ui.d=id;const d=isDone(q),w=isWaiting(q),i=dlInfo(q);
  $('#dd').innerHTML=`<div class="dh" style="--t:${hue(q.tier)}"><span class="tier" style="cursor:default">${R[q.tier-1]}</span><h2>${esc(q.name)}</h2><button class="ic" data-close aria-label="Tutup">✕</button></div>
 <p class="desc">${q.desc?esc(q.desc):'<i>Tanpa deskripsi</i>'}</p>
-<div class="chips"><span class="chip">${typeLabel(q)}</span><span class="chip ${d?'':i.c}">${d?'Selesai '+fmtDT(q.doneAt):i.t}</span>${q.dl.at?`<span class="chip">Deadline ${fmtDT(q.dl.at)}</span>`:''}</div>
+<div class="chips"><span class="chip">${typeLabel(q)}</span>${q.sch?`<span class="chip">${schLabel(q)}</span>`:''}<span class="chip ${d||w?'':i.c}">${d?'Selesai '+fmtDT(q.doneAt):w?'Muncul '+fmtW(nextOcc(q.sch,q.sch.at)):i.t}</span>${q.dl.at?`<span class="chip">Deadline ${fmtDT(q.dl.at)}</span>`:''}</div>
 <h4>Catatan</h4><div id="notes">${q.notes.map(noteH).join('')}</div><button class="ghost" data-act="addnote">+ Tambah note</button>
-<menu><button class="danger" data-act="del">Hapus</button><button data-act="edit">Edit</button><button class="pri" data-act="${d?'undo':'done'}">${d?'Batalkan selesai':'Selesai'}</button></menu>`;
+<menu><button class="danger" data-act="del">Hapus</button><button data-act="edit">Edit</button>${w?'<button class="pri" disabled>Belum muncul</button>':`<button class="pri" data-act="${d?'undo':'done'}">${d?'Batalkan selesai':'Selesai'}</button>`}</menu>`;
  $('#dd').showModal()}
 const closeD=()=>{const d=$('#dd');if(d.open)d.close()};
 let tm;$('#dd').addEventListener('input',e=>{const el=e.target.closest('.note'),q=get(ui.d);if(!el||!q)return;
@@ -106,17 +122,22 @@ const F=$('#qf');
 F.tr.innerHTML=R.map((r,i)=>`<option value="${i+1}">${r}${i===0?' (prioritas rendah)':i===9?' (prioritas tinggi)':''}</option>`).join('');
 F.ty.innerHTML=TK.map(k=>`<option value="${k}">${TYPES[k]}</option>`).join('');
 $('#tf').innerHTML='<option value="">Semua tier</option>'+R.map((r,i)=>`<option value="${i+1}">Tier ${r}</option>`).join('');
-function sync(){$('#evl').hidden=F.ty.value!=='custom';$('#dtl').hidden=F.dk.value!=='custom';F.dt.required=F.dk.value==='custom'}
+$('#dchips').innerHTML=[[1,'Sen'],[2,'Sel'],[3,'Rab'],[4,'Kam'],[5,'Jum'],[6,'Sab'],[0,'Min']].map(([v,l])=>`<label><input type="checkbox" value="${v}"><span>${l}</span></label>`).join('');
+function sync(){const on=F.sc.value==='on';$('#evl').hidden=F.ty.value!=='custom'||on;$('#tml').hidden=$('#dys').hidden=!on;$('#dtl').hidden=F.dk.value!=='custom';F.dt.required=F.dk.value==='custom'}
 function openForm(q){ui.edit=q?q.id:null;$('#qt').textContent=q?'Edit quest':'Quest baru';
  F.nm.value=q?q.name:'';F.ds.value=q?q.desc:'';F.tr.value=q?q.tier:5;F.ty.value=q?q.type:(ui.type==='all'?'daily':ui.type);F.ev.value=q?q.every:0;
  F.dk.value=q?q.dl.k:'none';F.dt.value=q&&q.dl.k==='custom'&&q.dl.at?new Date(q.dl.at-new Date(q.dl.at).getTimezoneOffset()*6e4).toISOString().slice(0,16):'';
+ F.sc.value=q&&q.sch?'on':'off';F.tm.value=q&&q.sch?q.sch.time:'08:00';
+ document.querySelectorAll('#dchips input').forEach(c=>c.checked=!!(q&&q.sch&&q.sch.days.includes(+c.value)));
  sync();$('#qd').showModal();F.nm.focus()}
 F.addEventListener('change',sync);
 F.addEventListener('submit',e=>{e.preventDefault();const name=F.nm.value.trim();if(!name)return;
- const old=ui.edit&&get(ui.edit),k=F.dk.value;let at=null;
+ const old=ui.edit&&get(ui.edit),k=F.dk.value,on=F.sc.value==='on',days=[...document.querySelectorAll('#dchips input:checked')].map(c=>+c.value);let at=null;
+ if(on&&!days.length){alert('Pilih minimal satu hari untuk jadwal muncul.');return}
+ const sch=on?{days,time:F.tm.value||'08:00',at:old?(old.sch?old.sch.at:old.created):Date.now()}:null;
  if(k==='custom')at=new Date(F.dt.value).getTime();
- else if(k!=='none')at=old&&old.dl.k===k&&old.dl.at?old.dl.at:Date.now()+(k==='day'?1:7)*DAY;
- const data={name,desc:F.ds.value.trim(),tier:+F.tr.value,type:F.ty.value,every:F.ty.value==='custom'?num(F.ev.value,0,3650,0):0,dl:{k,at}};
+ else if(k!=='none')at=old&&old.dl.k===k&&old.dl.at?old.dl.at:dlBase(sch)+(k==='day'?1:7)*DAY;
+ const data={name,desc:F.ds.value.trim(),tier:+F.tr.value,type:F.ty.value,every:F.ty.value==='custom'?num(F.ev.value,0,3650,0):0,dl:{k,at},sch};
  if(old)Object.assign(old,data);else S.quests.push({id:uid(),notes:[],created:Date.now(),doneAt:null,doneLog:null,...data});
  save();$('#qd').close();render()});
 
