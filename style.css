@@ -85,3 +85,5 @@ h4{margin:18px 0 4px;font:700 1rem var(--ser)}
 .days input:focus-visible+span{outline:3px solid #3b82f6;outline-offset:2px}
 .row.wait{opacity:.55}.row.wait .chk{visibility:hidden}
 .pri:disabled{opacity:.45;cursor:default}
+.presets{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.presets button{min-height:40px;padding:4px 12px;font-size:.85rem}

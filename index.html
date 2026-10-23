@@ -53,7 +53,9 @@
     <div class="panel"><h2>Reset</h2><p>Hapus semua quest dan progres dari perangkat ini.</p>
       <button class="danger" data-act="reset">Hapus semua data</button></div>
     <input type="file" id="file" accept=".json,application/json" hidden>
-    <p class="foot">Data disimpan di perangkat ini. Export secara berkala sebagai cadangan.</p>
+    <div class="panel"><h2>Aplikasi</h2><p>Jika tampilan belum berubah setelah update, perbarui aplikasi. Data quest tidak terhapus.</p>
+      <button data-act="upd">Perbarui aplikasi</button></div>
+    <p class="foot">Data disimpan di perangkat ini. Export secara berkala sebagai cadangan. Versi aplikasi: <b id="ver">lama</b></p>
   </section>
 </main>
 
@@ -73,14 +75,20 @@
     <label>Type<select name="ty"></select></label>
   </div>
   <label id="evl" hidden>Ulangi tiap berapa hari? (0 = sekali saja)<input name="ev" type="number" min="0" max="3650" value="0" inputmode="numeric"></label>
-  <div class="two">
-    <label>Jadwal muncul<select name="sc"><option value="off">Selalu tampil</option><option value="on">Hari &amp; jam tertentu</option></select></label>
-    <label id="tml" hidden>Jam muncul<input name="tm" type="time" value="08:00"></label>
-  </div>
-  <div id="dys" role="group" aria-label="Hari muncul" hidden>
-    <span class="lbl">Hari muncul</span>
-    <div class="days" id="dchips"></div>
-    <p class="hint">Quest muncul pada hari dan jam ini, lalu muncul lagi di jadwal berikutnya setelah diselesaikan.</p>
+  <div id="dys" role="group" aria-label="Jadwal muncul">
+    <span class="lbl">Jadwal muncul (opsional)</span>
+    <div class="days" id="dchips">
+      <label><input type="checkbox" value="1"><span>Sen</span></label>
+      <label><input type="checkbox" value="2"><span>Sel</span></label>
+      <label><input type="checkbox" value="3"><span>Rab</span></label>
+      <label><input type="checkbox" value="4"><span>Kam</span></label>
+      <label><input type="checkbox" value="5"><span>Jum</span></label>
+      <label><input type="checkbox" value="6"><span>Sab</span></label>
+      <label><input type="checkbox" value="0"><span>Min</span></label>
+    </div>
+    <div class="presets"><button type="button" data-days="0123456">Setiap hari</button><button type="button" data-days="12345">Hari kerja</button><button type="button" data-days="60">Akhir pekan</button><button type="button" data-days="">Hapus pilihan</button></div>
+    <label>Jam muncul<input name="tm" type="time" value="08:00"></label>
+    <p class="hint">Pilih hari supaya quest hanya muncul pada hari dan jam itu, lalu muncul lagi di jadwal berikutnya setelah selesai. Tanpa hari yang dipilih, quest selalu tampil.</p>
   </div>
   <div class="two">
     <label>Deadline<select name="dk"><option value="none">Tanpa deadline</option><option value="day">1 hari</option><option value="week">1 minggu</option><option value="custom">Custom</option></select></label>

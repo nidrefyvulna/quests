@@ -1,0 +1,185 @@
+{
+  "app": "quests",
+  "kind": "quests",
+  "v": 1,
+  "exported": "2026-10-23T00:00:00.000Z",
+  "data": [
+    {
+      "id": "q-catur",
+      "name": "Catur",
+      "desc": "Latihan taktik 15 menit, lalu 1 game rapid. Setelah selesai, review satu kesalahan terbesar.",
+      "tier": 7,
+      "type": "daily",
+      "every": 0,
+      "dl": {
+        "k": "day"
+      },
+      "notes": [
+        {
+          "text": "Catat pola kesalahan yang sering muncul, misalnya blunder atau lupa cek ancaman lawan."
+        }
+      ]
+    },
+    {
+      "id": "q-osu",
+      "name": "Osu!",
+      "desc": "Main 3 sampai 5 map. Satu di antaranya sedikit di atas level nyamanmu untuk melatih aim dan stamina jari.",
+      "tier": 5,
+      "type": "weekly",
+      "every": 0,
+      "dl": {
+        "k": "none"
+      },
+      "notes": [],
+      "sch": {
+        "days": [
+          6,
+          0
+        ],
+        "time": "15:00"
+      }
+    },
+    {
+      "id": "q-geometry-dash",
+      "name": "Geometry Dash",
+      "desc": "Target bulanan: tamatkan satu level baru. Latihan di practice mode dan catat persentase terbaikmu.",
+      "tier": 5,
+      "type": "monthly",
+      "every": 0,
+      "dl": {
+        "k": "none"
+      },
+      "notes": [
+        {
+          "text": "Level target bulan ini: (tulis di sini)"
+        }
+      ]
+    },
+    {
+      "id": "q-menggambar",
+      "name": "Menggambar",
+      "desc": "Sketsa 30 menit dengan satu fokus per sesi: gesture, anatomi, perspektif, atau shading.",
+      "tier": 6,
+      "type": "weekly",
+      "every": 0,
+      "dl": {
+        "k": "week"
+      },
+      "notes": [],
+      "sch": {
+        "days": [
+          2,
+          4,
+          6
+        ],
+        "time": "19:00"
+      }
+    },
+    {
+      "id": "q-pemrograman",
+      "name": "Pemrograman",
+      "desc": "Coding 45 menit: selesaikan satu soal latihan atau tambah satu fitur di proyek pribadi.",
+      "tier": 7,
+      "type": "daily",
+      "every": 0,
+      "dl": {
+        "k": "day"
+      },
+      "notes": [
+        {
+          "text": "Tulis satu hal baru yang kamu pelajari hari ini."
+        }
+      ]
+    },
+    {
+      "id": "q-bahasa-inggris",
+      "name": "Bahasa Inggris",
+      "desc": "20 menit: pelajari 10 kosakata baru, lalu listening atau baca satu artikel pendek.",
+      "tier": 7,
+      "type": "daily",
+      "every": 0,
+      "dl": {
+        "k": "day"
+      },
+      "notes": [],
+      "sch": {
+        "days": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "time": "07:00"
+      }
+    },
+    {
+      "id": "q-bahasa-mandarin",
+      "name": "Bahasa Mandarin",
+      "desc": "Hafalkan 10 kosakata baru, lalu latihan pinyin dan nada selama 15 menit.",
+      "tier": 5,
+      "type": "custom",
+      "every": 2,
+      "dl": {
+        "k": "none"
+      },
+      "notes": [
+        {
+          "text": "Kosakata yang masih sering lupa dicatat di sini."
+        }
+      ]
+    },
+    {
+      "id": "q-matematika",
+      "name": "Matematika",
+      "desc": "Latihan soal 45 menit. Kerjakan dulu tanpa melihat pembahasan, baru cocokkan jawabannya.",
+      "tier": 8,
+      "type": "daily",
+      "every": 0,
+      "dl": {
+        "k": "day"
+      },
+      "notes": [
+        {
+          "text": "Topik yang masih lemah: (tulis di sini)"
+        }
+      ],
+      "sch": {
+        "days": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "time": "16:00"
+      }
+    },
+    {
+      "id": "q-work-out",
+      "name": "Work Out",
+      "desc": "Full-body tanpa alat, fokus gerakan compound seperti burpee dan squat. Ikuti jadwal.txt, pemanasan dan pendinginan masing-masing 5 menit.",
+      "tier": 9,
+      "type": "weekly",
+      "every": 0,
+      "dl": {
+        "k": "day"
+      },
+      "notes": [
+        {
+          "text": "Catat jumlah repetisi atau durasi tiap sesi supaya progresnya terlihat."
+        }
+      ],
+      "sch": {
+        "days": [
+          1,
+          3,
+          5
+        ],
+        "time": "17:30"
+      }
+    }
+  ]
+}

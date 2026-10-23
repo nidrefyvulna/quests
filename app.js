@@ -1,5 +1,5 @@
 'use strict';
-const $=s=>document.querySelector(s),KEY='quests.v1',DAY=864e5;
+const $=s=>document.querySelector(s),KEY='quests.v1',DAY=864e5,VER=3;
 const R=['I','II','III','IV','V','VI','VII','VIII','IX','X'];
 const TYPES={daily:'Daily',weekly:'Weekly',monthly:'Monthly',custom:'Custom'},TK=Object.keys(TYPES);
 const num=(v,a,b,d)=>{v=Math.round(+v);return Number.isFinite(v)?Math.min(b,Math.max(a,v)):d};
@@ -122,18 +122,17 @@ const F=$('#qf');
 F.tr.innerHTML=R.map((r,i)=>`<option value="${i+1}">${r}${i===0?' (prioritas rendah)':i===9?' (prioritas tinggi)':''}</option>`).join('');
 F.ty.innerHTML=TK.map(k=>`<option value="${k}">${TYPES[k]}</option>`).join('');
 $('#tf').innerHTML='<option value="">Semua tier</option>'+R.map((r,i)=>`<option value="${i+1}">Tier ${r}</option>`).join('');
-$('#dchips').innerHTML=[[1,'Sen'],[2,'Sel'],[3,'Rab'],[4,'Kam'],[5,'Jum'],[6,'Sab'],[0,'Min']].map(([v,l])=>`<label><input type="checkbox" value="${v}"><span>${l}</span></label>`).join('');
-function sync(){const on=F.sc.value==='on';$('#evl').hidden=F.ty.value!=='custom'||on;$('#tml').hidden=$('#dys').hidden=!on;$('#dtl').hidden=F.dk.value!=='custom';F.dt.required=F.dk.value==='custom'}
+F.addEventListener('click',e=>{const b=e.target.closest('[data-days]');if(!b)return;document.querySelectorAll('#dchips input').forEach(c=>c.checked=b.dataset.days.includes(c.value));sync()});
+function sync(){const on=!!document.querySelector('#dchips input:checked');$('#evl').hidden=F.ty.value!=='custom'||on;$('#dtl').hidden=F.dk.value!=='custom';F.dt.required=F.dk.value==='custom'}
 function openForm(q){ui.edit=q?q.id:null;$('#qt').textContent=q?'Edit quest':'Quest baru';
  F.nm.value=q?q.name:'';F.ds.value=q?q.desc:'';F.tr.value=q?q.tier:5;F.ty.value=q?q.type:(ui.type==='all'?'daily':ui.type);F.ev.value=q?q.every:0;
  F.dk.value=q?q.dl.k:'none';F.dt.value=q&&q.dl.k==='custom'&&q.dl.at?new Date(q.dl.at-new Date(q.dl.at).getTimezoneOffset()*6e4).toISOString().slice(0,16):'';
- F.sc.value=q&&q.sch?'on':'off';F.tm.value=q&&q.sch?q.sch.time:'08:00';
+ F.tm.value=q&&q.sch?q.sch.time:'08:00';
  document.querySelectorAll('#dchips input').forEach(c=>c.checked=!!(q&&q.sch&&q.sch.days.includes(+c.value)));
  sync();$('#qd').showModal();F.nm.focus()}
 F.addEventListener('change',sync);
 F.addEventListener('submit',e=>{e.preventDefault();const name=F.nm.value.trim();if(!name)return;
- const old=ui.edit&&get(ui.edit),k=F.dk.value,on=F.sc.value==='on',days=[...document.querySelectorAll('#dchips input:checked')].map(c=>+c.value);let at=null;
- if(on&&!days.length){alert('Pilih minimal satu hari untuk jadwal muncul.');return}
+ const old=ui.edit&&get(ui.edit),k=F.dk.value,days=[...document.querySelectorAll('#dchips input:checked')].map(c=>+c.value),on=days.length>0;let at=null;
  const sch=on?{days,time:F.tm.value||'08:00',at:old?(old.sch?old.sch.at:old.created):Date.now()}:null;
  if(k==='custom')at=new Date(F.dt.value).getTime();
  else if(k!=='none')at=old&&old.dl.k===k&&old.dl.at?old.dl.at:dlBase(sch)+(k==='day'?1:7)*DAY;
@@ -167,6 +166,7 @@ const A={add:()=>openForm(),open:id=>openDetail(id),done:id=>{complete(id);close
  del:id=>{if(confirm('Hapus quest ini? Riwayat di Log tetap tersimpan.')){S.quests=S.quests.filter(q=>q.id!==id);save();closeD();render()}},
  addnote:id=>{const q=get(id);q.notes.push({id:uid(),text:'',ts:Date.now()});save();const n=$('#notes');n.insertAdjacentHTML('beforeend',noteH(q.notes.at(-1)));n.lastElementChild.querySelector('textarea').focus()},
  delnote:(id,b)=>{const q=get(id),el=b.closest('.note');q.notes=q.notes.filter(n=>n.id!==el.dataset.nid);el.remove();save()},
+ upd:async()=>{try{for(const k of await caches.keys())await caches.delete(k);for(const r of await navigator.serviceWorker.getRegistrations())await r.unregister()}catch(e){}location.reload()},
  exq:exportQ,imq:()=>pick('quests'),exp:exportP,imp:()=>pick('progress'),
  reset:()=>{if(confirm('Hapus SEMUA quest dan progres? Ini tidak bisa dibatalkan.')&&confirm('Yakin? Pastikan kamu sudah export cadangan.')){S={quests:[],log:[]};save();render()}}};
 document.addEventListener('click',e=>{const b=e.target.closest('[data-act],[data-nav],[data-type],[data-close]');if(!b)return;const d=b.dataset;
@@ -181,5 +181,8 @@ applyTheme(document.documentElement.dataset.theme);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)render()});
 setInterval(render,6e4);
 navigator.storage?.persist?.();
-if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+if('serviceWorker' in navigator){const had=!!navigator.serviceWorker.controller;let rl=false;
+ navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had&&!rl){rl=true;location.reload()}});
+ addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
+const ve=$('#ver');if(ve)ve.textContent=VER;
 render();show('quests');
