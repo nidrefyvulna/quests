@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f2f4f8">
+<meta name="description" content="Quests: kelola waktu dengan sistem quest.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Quests">
+<title>Quests</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+<script>document.documentElement.dataset.theme=localStorage.getItem('quests.theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')</script>
+</head>
+<body>
+<header class="top">
+  <h1>Quests</h1>
+  <span class="lvl" id="lvl"></span>
+  <button class="ic" id="theme" aria-label="Ganti tema terang/gelap">◐</button>
+</header>
+<main>
+  <section id="v-quests">
+    <div class="tabs" id="types" role="tablist"></div>
+    <div class="tools">
+      <input type="search" id="q" placeholder="Cari quest…" aria-label="Cari quest">
+      <select id="sort" aria-label="Urutkan">
+        <option value="tierD">Tier D (X ke I)</option>
+        <option value="tierA">Tier A (I ke X)</option>
+        <option value="dlA">Deadline A (terdekat)</option>
+        <option value="dlD">Deadline D (terjauh)</option>
+      </select>
+      <select id="tf" aria-label="Filter tier"></select>
+      <label class="chk2"><input type="checkbox" id="sd" checked> Tampilkan yang sudah selesai</label>
+    </div>
+    <div id="list" class="list"></div>
+  </section>
+
+  <section id="v-log" hidden>
+    <div class="stats" id="stats"></div>
+    <div id="loglist"></div>
+  </section>
+
+  <section id="v-data" hidden>
+    <div class="panel"><h2>Quests</h2><p>Simpan atau pindahkan daftar quest beserta note-nya.</p>
+      <div class="btns"><button class="pri" data-act="exq">Export Quests</button><button data-act="imq">Import Quests</button></div></div>
+    <div class="panel"><h2>Progres</h2><p>Riwayat quest selesai, XP, dan status selesai saat ini.</p>
+      <div class="btns"><button class="pri" data-act="exp">Export Progres</button><button data-act="imp">Import Progres</button></div></div>
+    <div class="panel"><h2>Mode import</h2><p>Berlaku untuk import quests maupun progres.</p>
+      <select id="mode" aria-label="Mode import"><option value="merge">Gabungkan dengan data yang ada</option><option value="replace">Ganti data yang ada</option></select></div>
+    <div class="panel"><h2>Reset</h2><p>Hapus semua quest dan progres dari perangkat ini.</p>
+      <button class="danger" data-act="reset">Hapus semua data</button></div>
+    <input type="file" id="file" accept=".json,application/json" hidden>
+    <p class="foot">Data disimpan di perangkat ini. Export secara berkala sebagai cadangan.</p>
+  </section>
+</main>
+
+<button class="fab" id="fab" data-act="add" aria-label="Tambah quest">+</button>
+<nav class="nav">
+  <button data-nav="quests" class="on">Quests</button>
+  <button data-nav="log">Log</button>
+  <button data-nav="data">Data</button>
+</nav>
+
+<dialog id="qd"><form id="qf" autocomplete="off">
+  <h2 id="qt">Quest baru</h2>
+  <label>Nama<input name="nm" required maxlength="120"></label>
+  <label>Deskripsi<textarea name="ds" rows="3" maxlength="1000"></textarea></label>
+  <div class="two">
+    <label>Tier<select name="tr"></select></label>
+    <label>Type<select name="ty"></select></label>
+  </div>
+  <label id="evl" hidden>Ulangi tiap berapa hari? (0 = sekali saja)<input name="ev" type="number" min="0" max="3650" value="0" inputmode="numeric"></label>
+  <div class="two">
+    <label>Deadline<select name="dk"><option value="none">Tanpa deadline</option><option value="day">1 hari</option><option value="week">1 minggu</option><option value="custom">Custom</option></select></label>
+    <label id="dtl" hidden>Tanggal &amp; jam<input name="dt" type="datetime-local"></label>
+  </div>
+  <menu><button type="button" data-close>Batal</button><button class="pri">Simpan</button></menu>
+</form></dialog>
+<dialog id="dd"></dialog>
+<div id="toast" role="status"></div>
+<script src="app.js"></script>
+</body>
+</html>
