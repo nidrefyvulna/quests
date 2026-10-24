@@ -26,14 +26,20 @@
     <div class="tabs" id="types" role="tablist"></div>
     <div class="tools">
       <input type="search" id="q" placeholder="Cari quest…" aria-label="Cari quest">
-      <select id="sort" aria-label="Urutkan">
+      <select id="sort" aria-label="Urutkan" autocomplete="off">
+        <option value="dlA">Quest Berakhir A (terdekat)</option>
+        <option value="dlD">Quest Berakhir D (terjauh)</option>
         <option value="tierD">Tier D (X ke I)</option>
         <option value="tierA">Tier A (I ke X)</option>
-        <option value="dlA">Deadline A (terdekat)</option>
-        <option value="dlD">Deadline D (terjauh)</option>
       </select>
       <select id="tf" aria-label="Filter tier"></select>
-      <label class="chk2"><input type="checkbox" id="sd" checked> Tampilkan selesai &amp; terjadwal</label>
+      <span class="lbl">Tampilkan quest yang</span>
+      <div class="days" id="fst" role="group" aria-label="Tampilkan quest yang">
+        <label><input type="checkbox" value="on" checked autocomplete="off"><span>Sedang berlangsung</span></label>
+        <label><input type="checkbox" value="wait" autocomplete="off"><span>Belum dimulai</span></label>
+        <label><input type="checkbox" value="done" autocomplete="off"><span>Sudah selesai</span></label>
+        <label><input type="checkbox" value="end" autocomplete="off"><span>Sudah berakhir</span></label>
+      </div>
     </div>
     <div id="list" class="list"></div>
   </section>
@@ -75,8 +81,8 @@
     <label>Type<select name="ty"></select></label>
   </div>
   <label id="evl" hidden>Ulangi tiap berapa hari? (0 = sekali saja)<input name="ev" type="number" min="0" max="3650" value="0" inputmode="numeric"></label>
-  <div id="dys" role="group" aria-label="Jadwal muncul">
-    <span class="lbl">Jadwal muncul (opsional)</span>
+  <div id="dys" role="group" aria-label="Quest Dimulai">
+    <span class="lbl">Quest Dimulai</span>
     <div class="days" id="dchips">
       <label><input type="checkbox" value="1"><span>Sen</span></label>
       <label><input type="checkbox" value="2"><span>Sel</span></label>
@@ -87,12 +93,19 @@
       <label><input type="checkbox" value="0"><span>Min</span></label>
     </div>
     <div class="presets"><button type="button" data-days="0123456">Setiap hari</button><button type="button" data-days="12345">Hari kerja</button><button type="button" data-days="60">Akhir pekan</button><button type="button" data-days="">Hapus pilihan</button></div>
-    <label>Jam muncul<input name="tm" type="time" value="08:00"></label>
-    <p class="hint">Pilih hari supaya quest hanya muncul pada hari dan jam itu, lalu muncul lagi di jadwal berikutnya setelah selesai. Tanpa hari yang dipilih, quest selalu tampil.</p>
+    <label>Jam dimulai<input name="tm" type="time" value="08:00"></label>
+    <label>Mulai pada tanggal<input name="st" type="datetime-local"></label>
+    <p class="hint">Pilih hari supaya quest dimulai pada hari dan jam itu, lalu dimulai lagi di jadwal berikutnya. Tanpa hari, quest langsung dimulai dan berulang sesuai type. Isi tanggal untuk menunda awal quest.</p>
   </div>
-  <div class="two">
-    <label>Deadline<select name="dk"><option value="none">Tanpa deadline</option><option value="day">1 hari</option><option value="week">1 minggu</option><option value="custom">Custom</option></select></label>
-    <label id="dtl" hidden>Tanggal &amp; jam<input name="dt" type="datetime-local"></label>
+  <div id="bks" role="group" aria-label="Quest Berakhir">
+    <span class="lbl">Quest Berakhir</span>
+    <select name="dk" aria-label="Quest Berakhir"><option value="none">Tidak ada batas waktu</option><option value="after">Hitung mundur setelah dimulai</option><option value="custom">Tanggal dan jam tertentu</option></select>
+    <div class="two" id="afl" hidden>
+      <label>Berakhir setelah<input name="dn" type="number" min="1" max="9999" value="1" inputmode="numeric"></label>
+      <label>Satuan<select name="du"><option value="m">Menit</option><option value="h">Jam</option><option value="d" selected>Hari</option><option value="w">Minggu</option></select></label>
+    </div>
+    <label id="dtl" hidden>Berakhir pada<input name="dt" type="datetime-local"></label>
+    <p class="hint" id="dkh"></p>
   </div>
   <menu><button type="button" data-close>Batal</button><button class="pri">Simpan</button></menu>
 </form></dialog>

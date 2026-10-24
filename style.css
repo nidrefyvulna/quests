@@ -87,3 +87,8 @@ h4{margin:18px 0 4px;font:700 1rem var(--ser)}
 .pri:disabled{opacity:.45;cursor:default}
 .presets{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .presets button{min-height:40px;padding:4px 12px;font-size:.85rem}
+.tools .lbl,.tools .days{grid-column:1/-1}.tools .lbl{margin:4px 0 -2px}
+.row.end{opacity:.55}.row.end .chk{visibility:hidden}
+.meta{margin:10px 0 0;color:var(--mut);font-size:.85rem}
+#bks>select{margin-top:6px}
+.tools #sort,.tools #tf{grid-column:1/-1}
