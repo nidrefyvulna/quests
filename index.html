@@ -38,6 +38,7 @@
         <label><input type="checkbox" value="on" checked autocomplete="off"><span>Sedang berlangsung</span></label>
         <label><input type="checkbox" value="wait" autocomplete="off"><span>Belum dimulai</span></label>
         <label><input type="checkbox" value="done" autocomplete="off"><span>Sudah selesai</span></label>
+        <label><input type="checkbox" value="fail" autocomplete="off"><span>Sudah gagal</span></label>
         <label><input type="checkbox" value="end" autocomplete="off"><span>Sudah berakhir</span></label>
       </div>
     </div>
@@ -76,6 +77,7 @@
   <h2 id="qt">Quest baru</h2>
   <label>Nama<input name="nm" required maxlength="120"></label>
   <label>Deskripsi<textarea name="ds" rows="3" maxlength="1000"></textarea></label>
+  <label>Checklist (opsional, satu item per baris)<textarea name="ck" rows="3" maxlength="3000" placeholder="Contoh:&#10;Pemanasan&#10;Latihan inti&#10;Pendinginan"></textarea></label>
   <div class="two">
     <label>Tier<select name="tr"></select></label>
     <label>Type<select name="ty"></select></label>

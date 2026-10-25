@@ -92,3 +92,17 @@ h4{margin:18px 0 4px;font:700 1rem var(--ser)}
 .meta{margin:10px 0 0;color:var(--mut);font-size:.85rem}
 #bks>select{margin-top:6px}
 .tools #sort,.tools #tf{grid-column:1/-1}
+/* gagal, persentase, checklist */
+.row.fail{opacity:.55}.row.fail .chk{background:var(--bad);border-color:var(--bad)}
+.chip.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
+.pbar{height:6px;border-radius:6px;background:var(--ln);margin-top:8px;overflow:hidden}.pbar i{display:block;height:100%;background:var(--ink)}
+.prog{margin:6px 0 2px}.ph{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.ph b{font:700 1.7rem var(--ser)}.ph span{color:var(--mut);font-size:.85rem;text-align:right}
+input[type=range]{width:100%;min-height:36px;padding:0;border:0;background:none;accent-color:var(--ink)}
+.ci{display:flex;gap:8px;align-items:center;margin:6px 0}
+.ci input[type=checkbox]{flex:none;width:24px;height:24px;accent-color:var(--ink)}
+.ci .ct{flex:1;min-width:0}
+.ci button{flex:none;width:40px;min-height:40px;padding:0;border:0;background:none;color:var(--mut)}
+.fb{color:var(--bad);border-color:var(--bad)}
+.sp{flex:1}menu{flex-wrap:wrap}
+.le em.bad{color:var(--bad)}
