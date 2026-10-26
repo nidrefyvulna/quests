@@ -1,5 +1,5 @@
 'use strict';
-const $=s=>document.querySelector(s),KEY='quests.v1',DAY=864e5,VER=5;
+const $=s=>document.querySelector(s),KEY='quests.v1',DAY=864e5,VER=6;
 const R=['I','II','III','IV','V','VI','VII','VIII','IX','X'];
 const TYPES={daily:'Daily',weekly:'Weekly',monthly:'Monthly',custom:'Custom'},TK=Object.keys(TYPES);
 const SPAN={m:6e4,h:36e5,d:DAY,w:7*DAY};
@@ -54,11 +54,13 @@ function cleanQ(q,keep){q=q||{};const w=q.dl||{},mig=w.k==='day'||w.k==='week',s
 const cleanL=l=>l&&l.at?{id:sid(l.id)||uid(),qid:sid(l.qid),name:str(l.name,120),tier:num(l.tier,1,10,1),
  type:TK.includes(l.type)?l.type:'custom',xp:num(l.xp,0,1e4,10),at:num(l.at,0,9e15,Date.now()),res:l.res==='fail'?'fail':'done',pct:num(l.pct,0,100,l.res==='fail'?0:100)}:null;
 
+const cleanP=p=>({name:str(p&&p.name,24).trim()||'Petualang',goal:num(p&&p.goal,1,30,3),rest:[...new Set((Array.isArray(p&&p.rest)?p.rest:[]).map(Number).filter(d=>Number.isInteger(d)&&d>=0&&d<=6))].sort()});
+
 /* ---------- state ---------- */
-let S={quests:[],log:[]},ui={type:'all',edit:null,d:null,imp:null};
+let S={quests:[],log:[],profile:cleanP()},ui={type:'all',edit:null,d:null,imp:null,tab:'quests',pt:'sum',rng:7,lf:'all'};
 try{const raw=localStorage.getItem(KEY);if(raw&&!localStorage.getItem('quests.bak'))localStorage.setItem('quests.bak',raw)}catch(e){}
 try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&Array.isArray(d.quests)){
- S.quests=d.quests.map(q=>cleanQ(q,1));S.log=(Array.isArray(d.log)?d.log:[]).map(cleanL).filter(Boolean)}}catch(e){}
+ S.quests=d.quests.map(q=>cleanQ(q,1));S.log=(Array.isArray(d.log)?d.log:[]).map(cleanL).filter(Boolean);S.profile=cleanP(d.profile)}}catch(e){}
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('Gagal menyimpan data')}};
 const get=id=>S.quests.find(q=>q.id===id);
 
@@ -94,8 +96,8 @@ const pts=q=>Math.round(q.tier*10*eff(q)/100);
 
 /* ---------- sort / filter ---------- */
 const cmpDl=dir=>(a,b)=>{const x=endAt(a),y=endAt(b);if(x===y)return 0;if(x===Infinity)return 1;if(y===Infinity)return -1;return dir*(x-y)};
-const SORTS={dlA:cmpDl(1),dlD:cmpDl(-1),tierD:(a,b)=>b.tier-a.tier,tierA:(a,b)=>a.tier-b.tier},ORD={on:0,wait:1,done:2,fail:3,end:4};
-function visible(){const q=$('#q').value.trim().toLowerCase(),tf=$('#tf').value,cmp=SORTS[$('#sort').value]||SORTS.dlA,
+const SORTS={stA:(a,b)=>a.cs-b.cs,stD:(a,b)=>b.cs-a.cs,dlA:cmpDl(1),dlD:cmpDl(-1),tierD:(a,b)=>b.tier-a.tier,tierA:(a,b)=>a.tier-b.tier},ORD={on:0,wait:1,done:2,fail:3,end:4};
+function visible(){const q=$('#q').value.trim().toLowerCase(),tf=$('#tf').value,cmp=SORTS[$('#sort').value]||SORTS.stA,
  want=new Set([...document.querySelectorAll('#fst input:checked')].map(c=>c.value));
  return S.quests.filter(x=>(ui.type==='all'||x.type===ui.type)&&want.has(status(x))&&(!tf||x.tier==tf)&&
   (!q||(x.name+' '+x.desc+' '+x.notes.map(n=>n.text).join(' ')).toLowerCase().includes(q)))
@@ -118,23 +120,86 @@ function renderTypes(){const n=t=>S.quests.filter(q=>(t==='all'||q.type===t)&&st
  $('#types').innerHTML=[['all','Semua'],...Object.entries(TYPES)].map(([k,l])=>`<button role="tab" data-type="${k}" class="${ui.type===k?'on':''}">${l}<b>${n(k)}</b></button>`).join('')}
 function renderList(){const L=visible();
  $('#list').innerHTML=L.length?L.map(card).join(''):`<div class="empty">${S.quests.length?'Tidak ada quest dengan status yang dipilih.<br>Centang status lain di atas untuk melihat quest lainnya.':'Belum ada quest.<br>Tekan + untuk membuat quest pertamamu.'}</div>`}
-function stats(){const xp=S.log.reduce((s,l)=>s+l.xp,0),lv=Math.floor(Math.sqrt(xp/100))+1,lo=100*(lv-1)**2,hi=100*lv**2;
- const days=new Set(S.log.filter(l=>l.res!=='fail').map(l=>dkey(l.at))),d=new Date();d.setHours(0,0,0,0);if(!days.has(dkey(d)))d.setDate(d.getDate()-1);
- let st=0;while(days.has(dkey(d))){st++;d.setDate(d.getDate()-1)}
- const okL=S.log.filter(l=>l.res!=='fail');return{xp,lv,hi,pct:Math.round((xp-lo)/(hi-lo)*100),st,total:okL.length,fail:S.log.length-okL.length,avg:okL.length?Math.round(okL.reduce((a,l)=>a+l.pct,0)/okL.length):0,today:okL.filter(l=>dkey(l.at)===dkey(Date.now())).length}}
-function renderLog(){const s=stats();$('#lvl').textContent='Lv '+s.lv;
- $('#stats').innerHTML=`<div class="stat" style="grid-column:1/-1"><b>Level ${s.lv}</b><span>${s.xp} dari ${s.hi} XP menuju level berikutnya</span><div class="bar"><i style="width:${s.pct}%"></i></div></div>
-<div class="stat"><b>${s.today}</b><span>Selesai hari ini</span></div><div class="stat"><b>${s.total}</b><span>Total selesai</span></div>
-<div class="stat"><b>${s.st} hari</b><span>Streak berturut-turut</span></div><div class="stat"><b>${S.quests.filter(q=>status(q)==='on').length}</b><span>Quest berlangsung</span></div><div class="stat"><b>${s.fail}</b><span>Total gagal</span></div><div class="stat"><b>${s.avg}%</b><span>Rata-rata persentase selesai</span></div>`;
- let h='',last='';[...S.log].sort((a,b)=>b.at-a.at).slice(0,300).forEach(l=>{const k=dkey(l.at);
-  if(k!==last){last=k;h+=`<div class="day">${new Date(l.at).toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>`}
-  h+=`<div class="le" style="--t:${hue(l.tier)}"><span class="tier">${R[l.tier-1]}</span><div>${esc(l.name)}<br><small>${TYPES[l.type]}, ${fmtT(l.at)}${l.res==='fail'?', gagal':l.pct<100?', selesai '+l.pct+'%':''}</small></div>${l.res==='fail'?'<em class="bad">Gagal</em>':`<em>+${l.xp}</em>`}</div>`});
- $('#loglist').innerHTML=h||'<div class="empty">Belum ada quest yang selesai.<br>Selesaikan quest pertamamu.</div>'}
+/* ---------- profil: level, statistik, pencapaian, log ---------- */
+const RANKS=['Pemula','Petualang','Pendekar','Ksatria','Pahlawan','Legenda'],DAYL=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+const lvOf=xp=>{const lv=Math.floor(Math.sqrt(xp/100))+1,lo=100*(lv-1)**2,hi=100*lv**2;return{xp,lv,hi,pct:Math.round((xp-lo)/(hi-lo)*100)}};
+const rank=lv=>RANKS[Math.min(5,Math.floor((lv-1)/4))];
+const keyDate=k=>{const[y,m,d]=k.split('-').map(Number);return new Date(y,m-1,d)};
+const fmtL=d=>d.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+const todayCount=()=>S.log.filter(l=>l.res!=='fail'&&dkey(l.at)===dkey(Date.now())).length;
+function renderGoal(){const el=$('#goal');if(!el)return;const g=S.profile.goal,n=todayCount();
+ el.innerHTML=`<span>Target hari ini <b>${n} dari ${g}</b>${n>=g?', tercapai':''}</span><div class="pbar"><i style="width:${Math.min(100,Math.round(n/g*100))}%"></i></div>`}
+function analyze(){                                       // semua angka profil dihitung dari log
+ const okL=S.log.filter(l=>l.res!=='fail'),fl=S.log.filter(l=>l.res==='fail'),rest=new Set(S.profile.rest),byDay={},fa={};
+ const a={...lvOf(S.log.reduce((s,l)=>s+l.xp,0)),total:okL.length,fail:fl.length,byDay,tier:Array(10).fill(0),wd:Array(7).fill(0),hr:Array(24).fill(0),types:new Set(),perfect:0,high:0,maxDay:0,comeback:0,top:{},bad:{}};
+ fl.forEach(l=>{fa[l.qid]=Math.min(fa[l.qid]??Infinity,l.at);a.bad[l.name]=(a.bad[l.name]||0)+1});
+ okL.forEach(l=>{const d=new Date(l.at),x=byDay[dkey(l.at)]=byDay[dkey(l.at)]||{n:0,xp:0};x.n++;x.xp+=l.xp;a.maxDay=Math.max(a.maxDay,x.n);
+  a.tier[l.tier-1]++;a.wd[d.getDay()]++;a.hr[d.getHours()]++;a.types.add(l.type);if(l.pct>=100)a.perfect++;if(l.tier>=9)a.high++;if(fa[l.qid]<l.at)a.comeback++;a.top[l.name]=(a.top[l.name]||0)+1});
+ a.types=a.types.size;a.avg=okL.length?Math.round(okL.reduce((s,l)=>s+l.pct,0)/okL.length):0;
+ const t=new Date();t.setHours(0,0,0,0);a.today=(byDay[dkey(t)]||{n:0}).n;
+ const d=new Date(t);if(!byDay[dkey(d)])d.setDate(d.getDate()-1);a.cur=0;                      // streak: hari libur tidak memutus
+ for(let i=0;i<4000;i++){if(byDay[dkey(d)])a.cur++;else if(!rest.has(d.getDay()))break;d.setDate(d.getDate()-1)}
+ a.best=0;if(okL.length){let run=0;const s=new Date(okL.reduce((m,l)=>Math.min(m,l.at),Infinity));s.setHours(0,0,0,0);
+  for(let i=0;i<5000&&s<=t;i++){if(byDay[dkey(s)]){run++;a.best=Math.max(a.best,run)}else if(!rest.has(s.getDay()))run=0;s.setDate(s.getDate()+1)}}
+ return a}
+const bars=(vals,lab,o={})=>{const mx=Math.max(1,...vals);
+ return `<div class="bars">${vals.map((v,i)=>`<div class="bc${o.now===i?' now':''}${o.col?' hot':''}"${o.col?` style="--t:${o.col(i)}"`:''}><span class="bv">${o.nv?'':(v||'')}</span><div class="bb"><i style="height:${Math.round(v/mx*100)}%"></i></div><span class="bl">${lab[i]}</span></div>`).join('')}</div>`};
+function profH(a){const C=2*Math.PI*34;
+ return `<div class="pcard"><div class="rwrap"><svg class="ring" viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="34" class="rb"/><circle cx="40" cy="40" r="34" class="rf" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C*(1-a.pct/100)).toFixed(1)}"/></svg><b class="rl">${a.lv}</b></div>
+<div class="pi"><b>${esc(S.profile.name)}</b><span>${rank(a.lv)}, Level ${a.lv}</span><small>${a.xp} dari ${a.hi} XP ke level berikutnya</small><button data-act="prof">Atur profil</button></div></div>`}
+function sumH(a){const g=S.profile.goal,n=ui.rng,days=[...Array(n)].map((_,i)=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-(n-1-i));return d}),
+ xpOf=d=>(a.byDay[dkey(d)]||{xp:0}).xp,vals=days.map(xpOf),sum7=days.slice(-7).reduce((s,d)=>s+xpOf(d),0),rate=a.total+a.fail?Math.round(a.total/(a.total+a.fail)*100):0,
+ lab=days.map((d,i)=>n===7?DN[d.getDay()]:(i%5===0||i===n-1?d.getDate():''));
+ return `<div class="stats"><div class="stat wide"><b>${a.today} dari ${g}</b><span>Target quest hari ini${a.today>=g?' tercapai':''}</span><div class="bar"><i style="width:${Math.min(100,Math.round(a.today/g*100))}%"></i></div></div>
+<div class="stat"><b>${a.cur} hari</b><span>Streak sekarang</span><small>Terbaik ${a.best} hari</small></div>
+<div class="stat"><b>${a.total}</b><span>Quest selesai</span><small>${a.perfect} sempurna (100%)</small></div>
+<div class="stat"><b>${a.fail}</b><span>Quest gagal</span><small>Selesai dibanding gagal ${rate}%</small></div>
+<div class="stat"><b>${a.avg}%</b><span>Rata-rata persentase selesai</span></div>
+<div class="stat"><b>${sum7}</b><span>XP 7 hari terakhir</span></div>
+<div class="stat"><b>${S.quests.filter(q=>status(q)==='on').length}</b><span>Quest berlangsung</span></div></div>
+<h4 class="sec">XP per hari</h4><div class="seg"><button data-rng="7" class="${n===7?'on':''}">7 hari</button><button data-rng="30" class="${n===30?'on':''}">30 hari</button></div>
+${bars(vals,lab,{now:n-1,nv:n>7})}`}
+function heatH(a){const t=new Date();t.setHours(0,0,0,0);const s=new Date(t);s.setDate(s.getDate()-(t.getDay()+6)%7-17*7);
+ const mx=Object.values(a.byDay).reduce((m,x)=>Math.max(m,x.xp),1);let mon='',cells='',pm=-1;
+ for(let w=0;w<18;w++){const m=new Date(s);m.setDate(m.getDate()+w*7);mon+=`<i>${m.getMonth()!==pm?m.toLocaleDateString('id-ID',{month:'short'}):''}</i>`;pm=m.getMonth();
+  for(let d=0;d<7;d++){const x=new Date(s);x.setDate(x.getDate()+w*7+d);if(x>t){cells+='<i class="hc hid"></i>';continue}
+   const k=dkey(x),v=a.byDay[k],l=v?Math.min(4,Math.ceil(v.xp/mx*4)):0;
+   cells+=`<button class="hc l${l}${x.getTime()===t.getTime()?' td':''}" data-day="${k}" aria-label="${fmtL(x)}: ${v?v.n+' quest selesai, '+v.xp+' XP':'tidak ada aktivitas'}"></button>`}}
+ return `<div class="heat"><div class="hm">${mon}</div><div class="hg">${cells}</div></div><p class="hd" id="hd">Ketuk satu kotak untuk melihat detail hari itu.</p>
+<div class="leg"><span>Sedikit</span><i class="hc l0"></i><i class="hc l1"></i><i class="hc l2"></i><i class="hc l3"></i><i class="hc l4"></i><span>Banyak</span></div>`}
+function insH(a){if(a.total<3)return'<p class="hint">Selesaikan minimal 3 quest untuk melihat pola produktivitasmu.</p>';
+ const mi=r=>r.indexOf(Math.max(...r)),topOf=o=>Object.entries(o).sort((x,y)=>y[1]-x[1])[0],wd=mi(a.wd),hr=mi(a.hr),tq=topOf(a.top),bq=a.fail?topOf(a.bad):null;
+ return `<ul class="ins"><li>Hari paling produktif: <b>${DAYL[wd]}</b>, ${a.wd[wd]} quest selesai.</li><li>Jam paling aktif: <b>${hr}.00 sampai ${hr}.59</b>, ${a.hr[hr]} quest selesai.</li>
+<li>Quest paling sering selesai: <b>${esc(tq[0])}</b>, ${tq[1]} kali.</li>${bq?`<li>Quest paling sering gagal: <b>${esc(bq[0])}</b>, ${bq[1]} kali.</li>`:''}</ul>`}
+function statH(a){const ord=[1,2,3,4,5,6,0];
+ return `<h4 class="sec">Aktivitas 18 minggu</h4>${heatH(a)}<h4 class="sec">Selesai per hari dalam seminggu</h4>${bars(ord.map(d=>a.wd[d]),ord.map(d=>DN[d]))}
+<h4 class="sec">Selesai per tier</h4>${bars(a.tier,R,{col:i=>hue(i+1)})}<h4 class="sec">Pola produktivitas</h4>${insH(a)}`}
+const BADGES=[['Langkah Pertama','Selesaikan 1 quest',a=>a.total,1],['Sepuluh Quest','Selesaikan 10 quest',a=>a.total,10],['Lima Puluh Quest','Selesaikan 50 quest',a=>a.total,50],
+ ['Mulai Konsisten','Streak 3 hari',a=>a.best,3],['Seminggu Penuh','Streak 7 hari',a=>a.best,7],['Sebulan Penuh','Streak 30 hari',a=>a.best,30],
+ ['Sempurna','10 quest selesai 100%',a=>a.perfect,10],['Kolektor Poin','Kumpulkan 500 XP',a=>a.xp,500],['Tantangan Berat','Selesaikan 1 quest tier IX atau X',a=>a.high,1],
+ ['Hari Produktif','5 quest selesai dalam sehari',a=>a.maxDay,5],['Bangkit Lagi','Selesaikan quest yang pernah gagal',a=>a.comeback,1],['Serba Bisa','Selesaikan quest dari 4 type',a=>a.types,4]];
+function achH(a){const L=BADGES.map(([t,d,f,g])=>({t,d,g,v:Math.min(f(a),g)})),got=L.filter(x=>x.v>=x.g).length;
+ return `<p class="hint">${got} dari ${L.length} pencapaian tercapai.</p><div class="badges">${L.map(x=>`<div class="bd${x.v>=x.g?' got':''}"><b>${x.t}</b><span>${x.d}</span><div class="pbar"><i style="width:${Math.round(x.v/x.g*100)}%"></i></div><small>${x.v>=x.g?'Tercapai':x.v+' dari '+x.g}</small></div>`).join('')}</div>`}
+function logH(){const f=ui.lf,L=S.log.filter(l=>f==='all'||(f==='fail')===(l.res==='fail')).sort((x,y)=>y.at-x.at).slice(0,300);
+ let h='',g=null;const flush=()=>{if(g)h+=`<div class="day">${fmtL(new Date(g.t))}<span>${g.n} selesai${g.f?', '+g.f+' gagal':''}, +${g.xp} XP</span></div>${g.h}`};
+ L.forEach(l=>{const k=dkey(l.at);if(!g||g.k!==k){flush();g={k,t:l.at,n:0,f:0,xp:0,h:''}}
+  if(l.res==='fail')g.f++;else{g.n++;g.xp+=l.xp}
+  g.h+=`<div class="le" style="--t:${hue(l.tier)}"><span class="tier">${R[l.tier-1]}</span><div>${esc(l.name)}<br><small>${TYPES[l.type]}, ${fmtT(l.at)}${l.res==='fail'?', gagal':l.pct<100?', selesai '+l.pct+'%':''}</small></div>${l.res==='fail'?'<em class="bad">Gagal</em>':`<em>+${l.xp}</em>`}</div>`});flush();
+ return `<div class="seg">${[['all','Semua'],['done','Selesai'],['fail','Gagal']].map(([k,l])=>`<button data-lf="${k}" class="${f===k?'on':''}">${l}</button>`).join('')}</div>`+(h||'<div class="empty">Belum ada catatan.<br>Selesaikan quest pertamamu.</div>')}
+function renderProf(force){const sig=[S.log.length,(S.log.at(-1)||{}).id,S.profile.name,S.profile.goal,S.profile.rest.join(),dkey(Date.now()),ui.pt,ui.rng,ui.lf,S.quests.filter(q=>status(q)==='on').length].join('|');
+ if(!force&&sig===ui.sig)return;ui.sig=sig;const a=analyze();ui.a=a;$('#prof').innerHTML=profH(a);
+ $('#ptabs').innerHTML=[['sum','Ringkasan'],['stat','Statistik'],['ach','Pencapaian'],['log','Log']].map(([k,l])=>`<button role="tab" data-pt="${k}" class="${ui.pt===k?'on':''}">${l}</button>`).join('');
+ $('#pbody').innerHTML={sum:sumH,stat:statH,ach:achH,log:logH}[ui.pt](a)}
+const PF=$('#pf');
+function openProf(){PF.pn.value=S.profile.name;PF.pg.value=S.profile.goal;
+ document.querySelectorAll('#prest input').forEach(c=>c.checked=S.profile.rest.includes(+c.value));$('#pd').showModal();PF.pn.focus()}
+if(PF)PF.addEventListener('submit',e=>{e.preventDefault();
+ S.profile=cleanP({name:PF.pn.value,goal:PF.pg.value,rest:[...document.querySelectorAll('#prest input:checked')].map(c=>+c.value)});save();$('#pd').close();render()});
 function render(){refresh();const w=new Set(S.quests.filter(q=>status(q)==='wait').map(q=>q.id)),
  up=S.quests.filter(q=>ui.w&&ui.w.has(q.id)&&!w.has(q.id)&&status(q)==='on');ui.w=w;
- if(up.length)toast('Quest dimulai: '+up.map(q=>q.name).join(', '));renderTypes();renderList();renderLog()}
+ if(up.length)toast('Quest dimulai: '+up.map(q=>q.name).join(', '));renderTypes();renderList();renderGoal();$('#lvl').textContent='Lv '+lvOf(S.log.reduce((s,l)=>s+l.xp,0)).lv;if(ui.tab==='log')renderProf()}
 function show(t){['quests','log','data'].forEach(k=>$('#v-'+k).hidden=k!==t);
- document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.nav===t));$('#fab').hidden=t!=='quests';scrollTo(0,0)}
+ document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.nav===t));$('#fab').hidden=t!=='quests';ui.tab=t;if(t==='log')renderProf(true);scrollTo(0,0)}
 let tt;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2600)}
 
 /* ---------- aksi quest ---------- */
@@ -213,7 +278,7 @@ function dlFile(name,obj){const a=document.createElement('a');a.href=URL.createO
  a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2e3)}
 const stamp=()=>new Date().toISOString().slice(0,10),meta=k=>({app:'quests',kind:k,v:2,exported:new Date().toISOString()});
 const exportQ=()=>{dlFile(`quests-${stamp()}.json`,{...meta('quests'),data:S.quests.map(({doneAt,doneLog,cs,res,pct,...q})=>({...q,cl:q.cl.map(({id,t})=>({id,t}))}))});toast('Quests berhasil di-export')};
-const exportP=()=>{dlFile(`progres-${stamp()}.json`,{...meta('progress'),log:S.log,done:Object.fromEntries(S.quests.filter(q=>q.doneAt).map(q=>[q.id,[q.doneAt,q.doneLog,q.res,q.pct]]))});toast('Progres berhasil di-export')};
+const exportP=()=>{dlFile(`progres-${stamp()}.json`,{...meta('progress'),log:S.log,profile:S.profile,done:Object.fromEntries(S.quests.filter(q=>q.doneAt).map(q=>[q.id,[q.doneAt,q.doneLog,q.res,q.pct]]))});toast('Progres berhasil di-export')};
 const pick=k=>{ui.imp=k;const f=$('#file');f.value='';f.click()};
 const sk=x=>JSON.stringify([x.sch&&x.sch.days,x.sch&&x.sch.time,x.start]);
 $('#file').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;
@@ -224,7 +289,7 @@ $('#file').addEventListener('change',async e=>{const file=e.target.files[0];if(!
    toast(list.length+' quest berhasil di-import')}
   else{const log=(Array.isArray(d.log)?d.log:[]).map(cleanL).filter(Boolean);
    if(rep)S.log=log;else{const ids=new Set(S.log.map(l=>l.id));log.forEach(l=>ids.has(l.id)||S.log.push(l))}
-   const m=d.done&&typeof d.done==='object'?d.done:{};
+   if(d.profile)S.profile=cleanP(d.profile);const m=d.done&&typeof d.done==='object'?d.done:{};
    S.quests.forEach(q=>{const x=m[q.id];if(Array.isArray(x)){const at=num(x[0],0,9e15,0);if(at&&(rep||at>(q.doneAt||0))){q.doneAt=at;q.doneLog=sid(x[1])||null;q.res=x[2]==='fail'?'fail':null;if(fin(x[3]))q.pct=num(x[3],0,100,null)}}else if(rep)q.doneAt=q.doneLog=q.res=null});
    toast(log.length+' catatan progres berhasil di-import')}
   save();render()}catch(err){toast('File tidak cocok untuk jenis import ini')}
@@ -239,10 +304,15 @@ const A={add:()=>openForm(),open:id=>openDetail(id),done:id=>{const q=get(id);if
  del:id=>{if(confirm('Hapus quest ini? Riwayat di Log tetap tersimpan.')){S.quests=S.quests.filter(q=>q.id!==id);save();closeD();render()}},
  addnote:id=>{const q=get(id);q.notes.push({id:uid(),text:'',ts:Date.now()});save();const n=$('#notes');n.insertAdjacentHTML('beforeend',noteH(q.notes.at(-1)));n.lastElementChild.querySelector('textarea').focus()},
  delnote:(id,b)=>{const q=get(id),el=b.closest('.note');q.notes=q.notes.filter(n=>n.id!==el.dataset.nid);el.remove();save()},
+ prof:()=>openProf(),
  upd:async()=>{try{for(const k of await caches.keys())await caches.delete(k);for(const r of await navigator.serviceWorker.getRegistrations())await r.unregister()}catch(e){}location.reload()},
  exq:exportQ,imq:()=>pick('quests'),exp:exportP,imp:()=>pick('progress'),
- reset:()=>{if(confirm('Hapus SEMUA quest dan progres? Ini tidak bisa dibatalkan.')&&confirm('Yakin? Pastikan kamu sudah export cadangan.')){S={quests:[],log:[]};save();render()}}};
-document.addEventListener('click',e=>{const b=e.target.closest('[data-act],[data-nav],[data-type],[data-close],[data-pct]');if(!b)return;const d=b.dataset;
+ reset:()=>{if(confirm('Hapus SEMUA quest dan progres? Ini tidak bisa dibatalkan.')&&confirm('Yakin? Pastikan kamu sudah export cadangan.')){S={quests:[],log:[],profile:cleanP()};save();render()}}};
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act],[data-nav],[data-type],[data-close],[data-pct],[data-pt],[data-rng],[data-lf],[data-day]');if(!b)return;const d=b.dataset;
+ if(d.pt){ui.pt=d.pt;return renderProf(true)}
+ if(d.rng){ui.rng=+d.rng;return renderProf(true)}
+ if(d.lf){ui.lf=d.lf;return renderProf(true)}
+ if(d.day){const v=ui.a&&ui.a.byDay[d.day],h=$('#hd');if(h)h.textContent=fmtL(keyDate(d.day))+': '+(v?v.n+' quest selesai, +'+v.xp+' XP':'tidak ada aktivitas');return}
  if(d.pct){const q=get(ui.d);if(q&&status(q)==='on'){q.pct=+d.pct;syncProg();save()}return}
  if(d.nav)return show(d.nav);
  if(d.type){ui.type=d.type;return render()}

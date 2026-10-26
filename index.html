@@ -18,15 +18,18 @@
 <body>
 <header class="top">
   <h1>Quests</h1>
-  <span class="lvl" id="lvl"></span>
+  <span class="lvl" id="lvl" data-nav="log" role="button" title="Buka profil"></span>
   <button class="ic" id="theme" aria-label="Ganti tema terang/gelap">◐</button>
 </header>
 <main>
   <section id="v-quests">
+    <div class="goal" id="goal"></div>
     <div class="tabs" id="types" role="tablist"></div>
     <div class="tools">
       <input type="search" id="q" placeholder="Cari quest…" aria-label="Cari quest">
       <select id="sort" aria-label="Urutkan" autocomplete="off">
+        <option value="stA">Quest Dimulai A (paling awal)</option>
+        <option value="stD">Quest Dimulai D (paling baru)</option>
         <option value="dlA">Quest Berakhir A (terdekat)</option>
         <option value="dlD">Quest Berakhir D (terjauh)</option>
         <option value="tierD">Tier D (X ke I)</option>
@@ -46,8 +49,9 @@
   </section>
 
   <section id="v-log" hidden>
-    <div class="stats" id="stats"></div>
-    <div id="loglist"></div>
+    <div id="prof"></div>
+    <div class="tabs" id="ptabs" role="tablist"></div>
+    <div id="pbody"></div>
   </section>
 
   <section id="v-data" hidden>
@@ -69,7 +73,7 @@
 <button class="fab" id="fab" data-act="add" aria-label="Tambah quest">+</button>
 <nav class="nav">
   <button data-nav="quests" class="on">Quests</button>
-  <button data-nav="log">Log</button>
+  <button data-nav="log">Profil</button>
   <button data-nav="data">Data</button>
 </nav>
 
@@ -112,6 +116,25 @@
   <menu><button type="button" data-close>Batal</button><button class="pri">Simpan</button></menu>
 </form></dialog>
 <dialog id="dd"></dialog>
+<dialog id="pd"><form id="pf" autocomplete="off">
+  <h2>Profil</h2>
+  <label>Nama<input name="pn" maxlength="24" required></label>
+  <label>Target quest per hari<input name="pg" type="number" min="1" max="30" inputmode="numeric"></label>
+  <div role="group" aria-label="Hari libur">
+    <span class="lbl">Hari libur</span>
+    <div class="days" id="prest">
+      <label><input type="checkbox" value="1"><span>Sen</span></label>
+      <label><input type="checkbox" value="2"><span>Sel</span></label>
+      <label><input type="checkbox" value="3"><span>Rab</span></label>
+      <label><input type="checkbox" value="4"><span>Kam</span></label>
+      <label><input type="checkbox" value="5"><span>Jum</span></label>
+      <label><input type="checkbox" value="6"><span>Sab</span></label>
+      <label><input type="checkbox" value="0"><span>Min</span></label>
+    </div>
+    <p class="hint">Hari libur tidak memutus streak kalau kamu tidak menyelesaikan quest di hari itu.</p>
+  </div>
+  <menu><button type="button" data-close>Batal</button><button class="pri">Simpan</button></menu>
+</form></dialog>
 <div id="toast" role="status"></div>
 <script src="app.js"></script>
 </body>
