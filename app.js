@@ -1,5 +1,5 @@
 'use strict';
-const $=s=>document.querySelector(s),KEY='quests.v1',DAY=864e5,VER=6;
+const $=s=>document.querySelector(s),KEY='quests.v1',DAY=864e5,VER=7;
 const R=['I','II','III','IV','V','VI','VII','VIII','IX','X'];
 const TYPES={daily:'Daily',weekly:'Weekly',monthly:'Monthly',custom:'Custom'},TK=Object.keys(TYPES);
 const SPAN={m:6e4,h:36e5,d:DAY,w:7*DAY};
@@ -56,11 +56,19 @@ const cleanL=l=>l&&l.at?{id:sid(l.id)||uid(),qid:sid(l.qid),name:str(l.name,120)
 
 const cleanP=p=>({name:str(p&&p.name,24).trim()||'Petualang',goal:num(p&&p.goal,1,30,3),rest:[...new Set((Array.isArray(p&&p.rest)?p.rest:[]).map(Number).filter(d=>Number.isInteger(d)&&d>=0&&d<=6))].sort()});
 
+const parseTags=s=>{const seen=new Set(),out=[];String(s).split(/[,\n]/).forEach(t=>{t=t.replace(/^#+/,'').trim().replace(/\s+/g,' ').slice(0,24);const k=t.toLowerCase();if(t&&!seen.has(k)&&out.length<12){seen.add(k);out.push(t)}});return out};
+const cleanN=n=>{n=n||{};const from=fin(n.from)?+n.from:null,until=fin(n.until)?+n.until:null,now=Date.now();
+ const o={id:sid(n.id)||uid(),title:str(n.title,120).trim(),body:str(n.body,5000),tags:parseTags(Array.isArray(n.tags)?n.tags.join(','):''),pin:!!n.pin,arch:!!n.arch,
+  from,until:from!=null&&until!=null&&until<=from?null:until,created:num(n.created,0,9e15,now),edited:num(n.edited,0,9e15,now)};
+ return o.title||o.body.trim()?o:null};
+const nst=n=>{const t=Date.now();return n.arch?'arch':n.from!=null&&t<n.from?'wait':n.until!=null&&t>=n.until?'end':'show'};   // show, wait, end, arch
+const noteName=n=>n.title||n.body.split('\n')[0].slice(0,80)||'Tanpa judul';
+
 /* ---------- state ---------- */
-let S={quests:[],log:[],profile:cleanP()},ui={type:'all',edit:null,d:null,imp:null,tab:'quests',pt:'sum',rng:7,lf:'all'};
+let S={quests:[],log:[],notes:[],profile:cleanP()},ui={type:'all',edit:null,d:null,imp:null,tab:'quests',pt:'sum',rng:7,lf:'all',nt:'',ne:null};
 try{const raw=localStorage.getItem(KEY);if(raw&&!localStorage.getItem('quests.bak'))localStorage.setItem('quests.bak',raw)}catch(e){}
 try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&Array.isArray(d.quests)){
- S.quests=d.quests.map(q=>cleanQ(q,1));S.log=(Array.isArray(d.log)?d.log:[]).map(cleanL).filter(Boolean);S.profile=cleanP(d.profile)}}catch(e){}
+ S.quests=d.quests.map(q=>cleanQ(q,1));S.log=(Array.isArray(d.log)?d.log:[]).map(cleanL).filter(Boolean);S.profile=cleanP(d.profile);S.notes=(Array.isArray(d.notes)?d.notes:[]).map(cleanN).filter(Boolean)}}catch(e){}
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('Gagal menyimpan data')}};
 const get=id=>S.quests.find(q=>q.id===id);
 
@@ -120,22 +128,27 @@ function renderTypes(){const n=t=>S.quests.filter(q=>(t==='all'||q.type===t)&&st
  $('#types').innerHTML=[['all','Semua'],...Object.entries(TYPES)].map(([k,l])=>`<button role="tab" data-type="${k}" class="${ui.type===k?'on':''}">${l}<b>${n(k)}</b></button>`).join('')}
 function renderList(){const L=visible();
  $('#list').innerHTML=L.length?L.map(card).join(''):`<div class="empty">${S.quests.length?'Tidak ada quest dengan status yang dipilih.<br>Centang status lain di atas untuk melihat quest lainnya.':'Belum ada quest.<br>Tekan + untuk membuat quest pertamamu.'}</div>`}
-/* ---------- profil: level, statistik, pencapaian, log ---------- */
-const RANKS=['Pemula','Petualang','Pendekar','Ksatria','Pahlawan','Legenda'],DAYL=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
-const lvOf=xp=>{const lv=Math.floor(Math.sqrt(xp/100))+1,lo=100*(lv-1)**2,hi=100*lv**2;return{xp,lv,hi,pct:Math.round((xp-lo)/(hi-lo)*100)}};
-const rank=lv=>RANKS[Math.min(5,Math.floor((lv-1)/4))];
+/* ---------- rank (gaya Mobile Legends), profil, statistik, log ---------- */
+const RK=['Warrior','Elite','Master','Grandmaster','Epic','Legend','Mythic'],RH=[[28,38],[210,14],[45,72],[205,72],[268,55],[22,82],[345,76]],DAYL=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+const XPL=n=>5*(n-1)*(n-1)+95*(n-1);                                   // total XP untuk mencapai level n (tiap level butuh 10 XP lebih banyak: 100, 110, 120, ...)
+const lvOf=xp=>{let m=Math.max(0,Math.floor((-95+Math.sqrt(9025+20*xp))/10));while(XPL(m+2)<=xp)m++;while(m>0&&XPL(m+1)>xp)m--;
+ const lv=m+1,lo=XPL(lv),hi=XPL(lv+1);return{xp,lv,lo,hi,pct:Math.round((xp-lo)/(hi-lo)*100)}};
+function roman(n){let s='';for(const[v,r]of[[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']])while(n>=v){s+=r;n-=v}return s}
+const rk=i=>{const t=Math.min(6,Math.floor(i/10)),s=t===6?i-59:i%10+1;return{t,s,name:RK[t]+' '+roman(s)}};
+const rankOf=lv=>{const i=Math.floor((lv-1)/5);return{...rk(i),next:rk(i+1).name,pos:(lv-1)%5+1}};   // 5 level = 1 tingkat rank; Mythic tanpa batas
+const rankName=()=>rankOf(lvOf(S.log.reduce((s,l)=>s+l.xp,0)).lv).name;
 const keyDate=k=>{const[y,m,d]=k.split('-').map(Number);return new Date(y,m-1,d)};
 const fmtL=d=>d.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 const todayCount=()=>S.log.filter(l=>l.res!=='fail'&&dkey(l.at)===dkey(Date.now())).length;
 function renderGoal(){const el=$('#goal');if(!el)return;const g=S.profile.goal,n=todayCount();
  el.innerHTML=`<span>Target hari ini <b>${n} dari ${g}</b>${n>=g?', tercapai':''}</span><div class="pbar"><i style="width:${Math.min(100,Math.round(n/g*100))}%"></i></div>`}
 function analyze(){                                       // semua angka profil dihitung dari log
- const okL=S.log.filter(l=>l.res!=='fail'),fl=S.log.filter(l=>l.res==='fail'),rest=new Set(S.profile.rest),byDay={},fa={};
- const a={...lvOf(S.log.reduce((s,l)=>s+l.xp,0)),total:okL.length,fail:fl.length,byDay,tier:Array(10).fill(0),wd:Array(7).fill(0),hr:Array(24).fill(0),types:new Set(),perfect:0,high:0,maxDay:0,comeback:0,top:{},bad:{}};
- fl.forEach(l=>{fa[l.qid]=Math.min(fa[l.qid]??Infinity,l.at);a.bad[l.name]=(a.bad[l.name]||0)+1});
- okL.forEach(l=>{const d=new Date(l.at),x=byDay[dkey(l.at)]=byDay[dkey(l.at)]||{n:0,xp:0};x.n++;x.xp+=l.xp;a.maxDay=Math.max(a.maxDay,x.n);
-  a.tier[l.tier-1]++;a.wd[d.getDay()]++;a.hr[d.getHours()]++;a.types.add(l.type);if(l.pct>=100)a.perfect++;if(l.tier>=9)a.high++;if(fa[l.qid]<l.at)a.comeback++;a.top[l.name]=(a.top[l.name]||0)+1});
- a.types=a.types.size;a.avg=okL.length?Math.round(okL.reduce((s,l)=>s+l.pct,0)/okL.length):0;
+ const okL=S.log.filter(l=>l.res!=='fail'),fl=S.log.filter(l=>l.res==='fail'),rest=new Set(S.profile.rest),byDay={};
+ const a={...lvOf(S.log.reduce((s,l)=>s+l.xp,0)),total:okL.length,fail:fl.length,byDay,tier:Array(10).fill(0),wd:Array(7).fill(0),hr:Array(24).fill(0),perfect:0,top:{},bad:{}};
+ fl.forEach(l=>{a.bad[l.name]=(a.bad[l.name]||0)+1});
+ okL.forEach(l=>{const d=new Date(l.at),x=byDay[dkey(l.at)]=byDay[dkey(l.at)]||{n:0,xp:0};x.n++;x.xp+=l.xp;
+  a.tier[l.tier-1]++;a.wd[d.getDay()]++;a.hr[d.getHours()]++;if(l.pct>=100)a.perfect++;a.top[l.name]=(a.top[l.name]||0)+1});
+ a.avg=okL.length?Math.round(okL.reduce((s,l)=>s+l.pct,0)/okL.length):0;
  const t=new Date();t.setHours(0,0,0,0);a.today=(byDay[dkey(t)]||{n:0}).n;
  const d=new Date(t);if(!byDay[dkey(d)])d.setDate(d.getDate()-1);a.cur=0;                      // streak: hari libur tidak memutus
  for(let i=0;i<4000;i++){if(byDay[dkey(d)])a.cur++;else if(!rest.has(d.getDay()))break;d.setDate(d.getDate()-1)}
@@ -144,9 +157,10 @@ function analyze(){                                       // semua angka profil 
  return a}
 const bars=(vals,lab,o={})=>{const mx=Math.max(1,...vals);
  return `<div class="bars">${vals.map((v,i)=>`<div class="bc${o.now===i?' now':''}${o.col?' hot':''}"${o.col?` style="--t:${o.col(i)}"`:''}><span class="bv">${o.nv?'':(v||'')}</span><div class="bb"><i style="height:${Math.round(v/mx*100)}%"></i></div><span class="bl">${lab[i]}</span></div>`).join('')}</div>`};
-function profH(a){const C=2*Math.PI*34;
- return `<div class="pcard"><div class="rwrap"><svg class="ring" viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="34" class="rb"/><circle cx="40" cy="40" r="34" class="rf" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C*(1-a.pct/100)).toFixed(1)}"/></svg><b class="rl">${a.lv}</b></div>
-<div class="pi"><b>${esc(S.profile.name)}</b><span>${rank(a.lv)}, Level ${a.lv}</span><small>${a.xp} dari ${a.hi} XP ke level berikutnya</small><button data-act="prof">Atur profil</button></div></div>`}
+function profH(a){const C=2*Math.PI*34,r=rankOf(a.lv),h=RH[r.t];
+ return `<div class="pcard" style="--rh:${h[0]};--rs:${h[1]}%"><div class="rwrap"><svg class="ring" viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="34" class="rb"/><circle cx="40" cy="40" r="34" class="rf" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C*(1-a.pct/100)).toFixed(1)}"/></svg><b class="rl">${a.lv}</b></div>
+<div class="pi"><b>${esc(S.profile.name)}</b><span class="rk">${r.name}</span><div class="pips" aria-hidden="true">${[1,2,3,4,5].map(i=>`<i${i<=r.pos?' class="on"':''}></i>`).join('')}</div>
+<small>${a.xp} dari ${a.hi} XP ke level berikutnya</small><small>${6-r.pos} level lagi ke ${r.next}</small><button data-act="prof">Atur profil</button></div></div>`}
 function sumH(a){const g=S.profile.goal,n=ui.rng,days=[...Array(n)].map((_,i)=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-(n-1-i));return d}),
  xpOf=d=>(a.byDay[dkey(d)]||{xp:0}).xp,vals=days.map(xpOf),sum7=days.slice(-7).reduce((s,d)=>s+xpOf(d),0),rate=a.total+a.fail?Math.round(a.total/(a.total+a.fail)*100):0,
  lab=days.map((d,i)=>n===7?DN[d.getDay()]:(i%5===0||i===n-1?d.getDate():''));
@@ -174,12 +188,6 @@ function insH(a){if(a.total<3)return'<p class="hint">Selesaikan minimal 3 quest 
 function statH(a){const ord=[1,2,3,4,5,6,0];
  return `<h4 class="sec">Aktivitas 18 minggu</h4>${heatH(a)}<h4 class="sec">Selesai per hari dalam seminggu</h4>${bars(ord.map(d=>a.wd[d]),ord.map(d=>DN[d]))}
 <h4 class="sec">Selesai per tier</h4>${bars(a.tier,R,{col:i=>hue(i+1)})}<h4 class="sec">Pola produktivitas</h4>${insH(a)}`}
-const BADGES=[['Langkah Pertama','Selesaikan 1 quest',a=>a.total,1],['Sepuluh Quest','Selesaikan 10 quest',a=>a.total,10],['Lima Puluh Quest','Selesaikan 50 quest',a=>a.total,50],
- ['Mulai Konsisten','Streak 3 hari',a=>a.best,3],['Seminggu Penuh','Streak 7 hari',a=>a.best,7],['Sebulan Penuh','Streak 30 hari',a=>a.best,30],
- ['Sempurna','10 quest selesai 100%',a=>a.perfect,10],['Kolektor Poin','Kumpulkan 500 XP',a=>a.xp,500],['Tantangan Berat','Selesaikan 1 quest tier IX atau X',a=>a.high,1],
- ['Hari Produktif','5 quest selesai dalam sehari',a=>a.maxDay,5],['Bangkit Lagi','Selesaikan quest yang pernah gagal',a=>a.comeback,1],['Serba Bisa','Selesaikan quest dari 4 type',a=>a.types,4]];
-function achH(a){const L=BADGES.map(([t,d,f,g])=>({t,d,g,v:Math.min(f(a),g)})),got=L.filter(x=>x.v>=x.g).length;
- return `<p class="hint">${got} dari ${L.length} pencapaian tercapai.</p><div class="badges">${L.map(x=>`<div class="bd${x.v>=x.g?' got':''}"><b>${x.t}</b><span>${x.d}</span><div class="pbar"><i style="width:${Math.round(x.v/x.g*100)}%"></i></div><small>${x.v>=x.g?'Tercapai':x.v+' dari '+x.g}</small></div>`).join('')}</div>`}
 function logH(){const f=ui.lf,L=S.log.filter(l=>f==='all'||(f==='fail')===(l.res==='fail')).sort((x,y)=>y.at-x.at).slice(0,300);
  let h='',g=null;const flush=()=>{if(g)h+=`<div class="day">${fmtL(new Date(g.t))}<span>${g.n} selesai${g.f?', '+g.f+' gagal':''}, +${g.xp} XP</span></div>${g.h}`};
  L.forEach(l=>{const k=dkey(l.at);if(!g||g.k!==k){flush();g={k,t:l.at,n:0,f:0,xp:0,h:''}}
@@ -188,26 +196,76 @@ function logH(){const f=ui.lf,L=S.log.filter(l=>f==='all'||(f==='fail')===(l.res
  return `<div class="seg">${[['all','Semua'],['done','Selesai'],['fail','Gagal']].map(([k,l])=>`<button data-lf="${k}" class="${f===k?'on':''}">${l}</button>`).join('')}</div>`+(h||'<div class="empty">Belum ada catatan.<br>Selesaikan quest pertamamu.</div>')}
 function renderProf(force){const sig=[S.log.length,(S.log.at(-1)||{}).id,S.profile.name,S.profile.goal,S.profile.rest.join(),dkey(Date.now()),ui.pt,ui.rng,ui.lf,S.quests.filter(q=>status(q)==='on').length].join('|');
  if(!force&&sig===ui.sig)return;ui.sig=sig;const a=analyze();ui.a=a;$('#prof').innerHTML=profH(a);
- $('#ptabs').innerHTML=[['sum','Ringkasan'],['stat','Statistik'],['ach','Pencapaian'],['log','Log']].map(([k,l])=>`<button role="tab" data-pt="${k}" class="${ui.pt===k?'on':''}">${l}</button>`).join('');
- $('#pbody').innerHTML={sum:sumH,stat:statH,ach:achH,log:logH}[ui.pt](a)}
+ $('#ptabs').innerHTML=[['sum','Ringkasan'],['stat','Statistik'],['log','Log']].map(([k,l])=>`<button role="tab" data-pt="${k}" class="${ui.pt===k?'on':''}">${l}</button>`).join('');
+ $('#pbody').innerHTML={sum:sumH,stat:statH,log:logH}[ui.pt](a)}
 const PF=$('#pf');
 function openProf(){PF.pn.value=S.profile.name;PF.pg.value=S.profile.goal;
  document.querySelectorAll('#prest input').forEach(c=>c.checked=S.profile.rest.includes(+c.value));$('#pd').showModal();PF.pn.focus()}
 if(PF)PF.addEventListener('submit',e=>{e.preventDefault();
  S.profile=cleanP({name:PF.pn.value,goal:PF.pg.value,rest:[...document.querySelectorAll('#prest input:checked')].map(c=>+c.value)});save();$('#pd').close();render()});
-function render(){refresh();const w=new Set(S.quests.filter(q=>status(q)==='wait').map(q=>q.id)),
- up=S.quests.filter(q=>ui.w&&ui.w.has(q.id)&&!w.has(q.id)&&status(q)==='on');ui.w=w;
- if(up.length)toast('Quest dimulai: '+up.map(q=>q.name).join(', '));renderTypes();renderList();renderGoal();$('#lvl').textContent='Lv '+lvOf(S.log.reduce((s,l)=>s+l.xp,0)).lv;if(ui.tab==='log')renderProf()}
-function show(t){['quests','log','data'].forEach(k=>$('#v-'+k).hidden=k!==t);
- document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.nav===t));$('#fab').hidden=t!=='quests';ui.tab=t;if(t==='log')renderProf(true);scrollTo(0,0)}
+
+/* ---------- note: tag, waktu tampil, sort, filter ---------- */
+const nullLast=(f,dir)=>(a,b)=>{const x=f(a),y=f(b);if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;return dir*(x-y)};
+const nn=n=>noteName(n).toLowerCase();
+const NSORT={eD:(a,b)=>b.edited-a.edited,cD:(a,b)=>b.created-a.created,cA:(a,b)=>a.created-b.created,tA:(a,b)=>nn(a).localeCompare(nn(b),'id'),tD:(a,b)=>nn(b).localeCompare(nn(a),'id'),
+ fA:nullLast(n=>n.from,1),fD:nullLast(n=>n.from,-1),uA:nullLast(n=>n.until,1),uD:nullLast(n=>n.until,-1)};
+const tagStats=()=>{const c={};S.notes.forEach(n=>n.tags.forEach(t=>{const k=t.toLowerCase();(c[k]=c[k]||{t,k,n:0}).n++}));return Object.values(c).sort((a,b)=>b.n-a.n||a.t.localeCompare(b.t,'id'))};
+function visibleN(){const q=$('#nq').value.trim().toLowerCase(),want=new Set([...document.querySelectorAll('#nst input:checked')].map(c=>c.value)),cmp=NSORT[$('#nsort').value]||NSORT.eD,tg=ui.nt;
+ return S.notes.filter(n=>want.has(nst(n))&&(!tg||n.tags.some(t=>t.toLowerCase()===tg))&&(!q||(n.title+' '+n.body+' '+n.tags.join(' ')).toLowerCase().includes(q)))
+  .sort((a,b)=>b.pin-a.pin||cmp(a,b)||b.edited-a.edited)}
+function nTime(n,s){const t=Date.now();
+ if(s==='wait')return `<span class="chip">Tampil mulai ${fmtS(n.from)}</span>`;
+ if(s==='show'&&n.until!=null)return `<span class="chip ${n.until-t<36e5?'warn':''}">Tampil ${left(n.until-t)} lagi</span>`;
+ if(s==='end')return `<span class="chip bad">Berakhir ${fmtDT(n.until)}</span>`;
+ return s==='arch'?'<span class="chip">Arsip</span>':''}
+function nCard(n){const s=nst(n),pv=(n.title?n.body:n.body.split('\n').slice(1).join('\n')).trim();
+ return `<article class="ncard${s==='show'?'':' '+s}" data-nid="${n.id}" data-act="nopen"><h3>${n.pin?'<span class="pin" aria-label="Disematkan">★</span> ':''}${esc(noteName(n))}</h3>${pv?`<p>${esc(pv)}</p>`:''}
+<div class="chips">${n.tags.map(t=>`<span class="chip tg">#${esc(t)}</span>`).join('')}${nTime(n,s)}</div></article>`}
+function renderNotes(){const ts=tagStats();if(ui.nt&&!ts.some(x=>x.k===ui.nt))ui.nt='';
+ $('#ntags').innerHTML=`<button data-nt="" class="${ui.nt?'':'on'}">Semua</button>`+ts.map(x=>`<button data-nt="${esc(x.k)}" class="${ui.nt===x.k?'on':''}">#${esc(x.t)}<b>${x.n}</b></button>`).join('');
+ const L=visibleN();$('#nlist').innerHTML=L.length?L.map(nCard).join(''):`<div class="empty">${S.notes.length?'Tidak ada note dengan filter ini.<br>Coba centang status lain atau pilih tag Semua.':'Belum ada note.<br>Tekan + untuk membuat note pertamamu.'}</div>`}
+function renderStrip(){const el=$('#nstrip');if(!el)return;                       // note berjadwal yang sedang tampil, ditampilkan di tab Quests
+ const L=S.notes.filter(n=>(n.from!=null||n.until!=null)&&nst(n)==='show').sort((a,b)=>(a.until==null)-(b.until==null)||a.until-b.until||0).slice(0,3);
+ el.innerHTML=L.length?`<div class="nsh">Note aktif<button data-nav="notes">Semua note</button></div>`+L.map(n=>`<div class="ns" data-nid="${n.id}" data-act="nopen"><b>${esc(noteName(n))}</b><span>${n.until!=null?'Tampil sampai '+fmtS(n.until):'Tampil sejak '+fmtS(n.from)}</span></div>`).join(''):''}
+const NF=$('#nf');
+const ntSug=()=>{const cur=parseTags(NF.ng.value).map(t=>t.toLowerCase());
+ $('#nsug').innerHTML=tagStats().filter(x=>!cur.includes(x.k)).slice(0,10).map(x=>`<button type="button" data-tag="${esc(x.t)}">#${esc(x.t)}</button>`).join('')};
+function openNote(id){const n=id?S.notes.find(x=>x.id===id):null;ui.ne=n?n.id:null;$('#ntt').textContent=n?'Edit note':'Note baru';
+ NF.nj.value=n?n.title:'';NF.nb.value=n?n.body:'';NF.ng.value=n?n.tags.join(', '):'';NF.nf.value=n&&n.from!=null?loc(n.from):'';NF.nu.value=n&&n.until!=null?loc(n.until):'';
+ NF.np.checked=!!(n&&n.pin);NF.na.checked=!!(n&&n.arch);$('#ndel').hidden=!n;ntSug();$('#nd').showModal();(n?NF.nb:NF.nj).focus()}
+if(NF){
+ NF.addEventListener('click',e=>{const b=e.target.closest('[data-tag],[data-nw]');if(!b)return;
+  if(b.dataset.tag){NF.ng.value=parseTags(NF.ng.value+','+b.dataset.tag).join(', ');ntSug();return}
+  const n=new Date(),k=b.dataset.nw;let f=null,u=null;
+  if(k==='today'){const x=new Date(n);x.setHours(23,59,0,0);f=n.getTime();u=x.getTime()}
+  else if(k==='tomorrow'){const s=new Date(n);s.setDate(s.getDate()+1);s.setHours(0,0,0,0);const x=new Date(s);x.setHours(23,59,0,0);f=s.getTime();u=x.getTime()}
+  else if(k==='week'){f=n.getTime();u=n.getTime()+7*DAY}
+  NF.nf.value=f?loc(f):'';NF.nu.value=u?loc(u):''});
+ NF.addEventListener('input',e=>{if(e.target===NF.ng)ntSug()});
+ NF.addEventListener('submit',e=>{e.preventDefault();const title=NF.nj.value.trim(),body=NF.nb.value.trim();
+  if(!title&&!body){alert('Isi judul atau isi note.');return}
+  const from=NF.nf.value?new Date(NF.nf.value).getTime():null,until=NF.nu.value?new Date(NF.nu.value).getTime():null;
+  if(from!=null&&until!=null&&until<=from){alert('Waktu tampil sampai harus setelah waktu tampil mulai.');return}
+  const n=Date.now(),o=ui.ne&&S.notes.find(x=>x.id===ui.ne),data={title,body,tags:parseTags(NF.ng.value),from,until,pin:NF.np.checked,arch:NF.na.checked,edited:n};
+  if(o)Object.assign(o,data);else S.notes.push({id:uid(),created:n,...data});
+  save();$('#nd').close();render()})}
+
+function render(){refresh();const w=new Set(S.quests.filter(q=>status(q)==='wait').map(q=>q.id)),nw=new Set(S.notes.filter(n=>nst(n)==='wait').map(n=>n.id)),msg=[],
+ up=S.quests.filter(q=>ui.w&&ui.w.has(q.id)&&!w.has(q.id)&&status(q)==='on'),un=S.notes.filter(n=>ui.nw&&ui.nw.has(n.id)&&!nw.has(n.id)&&nst(n)==='show');ui.w=w;ui.nw=nw;
+ if(up.length)msg.push('Quest dimulai: '+up.map(q=>q.name).join(', '));if(un.length)msg.push('Note tampil: '+un.map(noteName).join(', '));if(msg.length)toast(msg.join('. '));
+ renderTypes();renderList();renderGoal();renderStrip();$('#lvl').textContent=rankName();if(ui.tab==='notes')renderNotes();if(ui.tab==='log')renderProf()}
+function show(t){['quests','notes','log','data'].forEach(k=>$('#v-'+k).hidden=k!==t);
+ document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.nav===t));
+ const f=$('#fab');f.hidden=t!=='quests'&&t!=='notes';f.dataset.act=t==='notes'?'nadd':'add';f.setAttribute('aria-label',t==='notes'?'Tambah note':'Tambah quest');
+ ui.tab=t;if(t==='log')renderProf(true);if(t==='notes')renderNotes();if(t==='data')renderBk();scrollTo(0,0)}
 let tt;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2600)}
 
 /* ---------- aksi quest ---------- */
 function finish(id,fail){const q=get(id);if(!q||status(q)!=='on')return;const p=fail?0:eff(q);
  if(!fail&&p<=0){toast('Persentase 0%: naikkan persentasenya atau tandai Gagal');return}
  const e={id:uid(),qid:q.id,name:q.name,tier:q.tier,type:q.type,xp:fail?0:pts(q),at:Date.now(),res:fail?'fail':'done',pct:p};
- S.log.push(e);q.doneAt=e.at;q.doneLog=e.id;q.res=fail?'fail':null;if(!fail)q.pct=p;save();render();
- toast(fail?`Gagal: ${q.name}`:`Selesai${p<100?' '+p+'%':''}: ${q.name} (+${e.xp} XP)`)}
+ const r0=rankName();S.log.push(e);q.doneAt=e.at;q.doneLog=e.id;q.res=fail?'fail':null;if(!fail)q.pct=p;save();render();
+ toast((fail?`Gagal: ${q.name}`:`Selesai${p<100?' '+p+'%':''}: ${q.name} (+${e.xp} XP)`)+(!fail&&rankName()!==r0?` Naik rank: ${rankName()}!`:''))}
 function undo(id){const q=get(id);if(!q)return;S.log=S.log.filter(l=>l.id!==q.doneLog);q.doneAt=q.doneLog=q.res=null;save();render()}
 const noteH=n=>`<div class="note" data-nid="${n.id}"><textarea rows="2" placeholder="Tulis catatan…" aria-label="Note">${esc(n.text)}</textarea><button data-act="delnote" aria-label="Hapus note">✕</button><small>Diedit ${fmtDT(n.ts)}</small></div>`;
 const ciH=(i,off)=>`<div class="ci" data-cid="${i.id}"><input type="checkbox" ${i.d?'checked':''} ${off?'disabled':''} aria-label="Item selesai"><input class="ct" value="${esc(i.t)}" placeholder="Tulis item…" ${off?'disabled':''} aria-label="Item checklist">${off?'':'<button data-act="delci" aria-label="Hapus item">✕</button>'}</div>`;
@@ -279,20 +337,29 @@ function dlFile(name,obj){const a=document.createElement('a');a.href=URL.createO
 const stamp=()=>new Date().toISOString().slice(0,10),meta=k=>({app:'quests',kind:k,v:2,exported:new Date().toISOString()});
 const exportQ=()=>{dlFile(`quests-${stamp()}.json`,{...meta('quests'),data:S.quests.map(({doneAt,doneLog,cs,res,pct,...q})=>({...q,cl:q.cl.map(({id,t})=>({id,t}))}))});toast('Quests berhasil di-export')};
 const exportP=()=>{dlFile(`progres-${stamp()}.json`,{...meta('progress'),log:S.log,profile:S.profile,done:Object.fromEntries(S.quests.filter(q=>q.doneAt).map(q=>[q.id,[q.doneAt,q.doneLog,q.res,q.pct]]))});toast('Progres berhasil di-export')};
+const exportN=()=>{dlFile(`note-${stamp()}.json`,{...meta('notes'),data:S.notes});toast('Note berhasil di-export')};
+const exportA=()=>{dlFile(`quests-semua-data-${stamp()}.json`,{...meta('all'),quests:S.quests,log:S.log,notes:S.notes,profile:S.profile});
+ try{localStorage.setItem('quests.bk',Date.now())}catch(e){}renderBk();toast('Semua data berhasil di-export')};
+function renderBk(){const el=$('#bk');if(!el)return;const t=+localStorage.getItem('quests.bk');
+ el.textContent=t?'Cadangan semua data terakhir: '+fmtDT(t)+', '+left(Date.now()-t)+' lalu.':'Belum pernah export semua data. Sebaiknya lakukan sekarang untuk berjaga-jaga.'}
 const pick=k=>{ui.imp=k;const f=$('#file');f.value='';f.click()};
 const sk=x=>JSON.stringify([x.sch&&x.sch.days,x.sch&&x.sch.time,x.start]);
 $('#file').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;
- try{const d=JSON.parse(await file.text());if(d.app!=='quests'||d.kind!==ui.imp)throw 0;const rep=$('#mode').value==='replace';
-  if(ui.imp==='quests'){const list=(Array.isArray(d.data)?d.data:[]).map(q=>cleanQ(q));
-   if(rep)S.quests=list;else list.forEach(n=>{const o=get(n.id);
-    if(o){n.cl.forEach(i=>{const m=o.cl.find(x=>x.t===i.t);if(m)i.d=m.d});Object.assign(o,n,{doneAt:o.doneAt,doneLog:o.doneLog,res:o.res,pct:o.pct,cs:sk(o)===sk(n)?o.cs:n.cs})}else S.quests.push(n)});
-   toast(list.length+' quest berhasil di-import')}
-  else{const log=(Array.isArray(d.log)?d.log:[]).map(cleanL).filter(Boolean);
-   if(rep)S.log=log;else{const ids=new Set(S.log.map(l=>l.id));log.forEach(l=>ids.has(l.id)||S.log.push(l))}
-   if(d.profile)S.profile=cleanP(d.profile);const m=d.done&&typeof d.done==='object'?d.done:{};
+ try{const d=JSON.parse(await file.text());if(d.app!=='quests'||d.kind!==ui.imp)throw 0;const rep=$('#mode').value==='replace',k=ui.imp;let msg='';
+  const arr=(v,f)=>(Array.isArray(v)?v:[]).map(f).filter(Boolean);
+  const upQ=n=>{const o=get(n.id);if(o){n.cl.forEach(i=>{const m=o.cl.find(x=>x.t===i.t);if(m)i.d=m.d});Object.assign(o,n,{doneAt:o.doneAt,doneLog:o.doneLog,res:o.res,pct:o.pct,cs:sk(o)===sk(n)?o.cs:n.cs})}else S.quests.push(n)};
+  const addL=log=>{const ids=new Set(S.log.map(l=>l.id));log.forEach(l=>ids.has(l.id)||S.log.push(l))};
+  const upN=list=>list.forEach(n=>{const i=S.notes.findIndex(x=>x.id===n.id);if(i<0)S.notes.push(n);else S.notes[i]=n});
+  if(k==='quests'){const list=arr(d.data,q=>cleanQ(q));if(rep)S.quests=list;else list.forEach(upQ);msg=list.length+' quest berhasil di-import'}
+  else if(k==='notes'){const list=arr(d.data,cleanN);if(rep)S.notes=list;else upN(list);msg=list.length+' note berhasil di-import'}
+  else if(k==='all'){const qs=arr(d.quests,q=>cleanQ(q,1)),log=arr(d.log,cleanL),ns=arr(d.notes,cleanN);
+   if(rep){S.quests=qs;S.log=log;S.notes=ns}else{qs.forEach(n=>{const i=S.quests.findIndex(x=>x.id===n.id);if(i<0)S.quests.push(n);else S.quests[i]=n});addL(log);upN(ns)}
+   if(d.profile)S.profile=cleanP(d.profile);msg='Semua data berhasil di-import ('+qs.length+' quest, '+ns.length+' note)'}
+  else{const log=arr(d.log,cleanL);if(rep)S.log=log;else addL(log);if(d.profile)S.profile=cleanP(d.profile);
+   const m=d.done&&typeof d.done==='object'?d.done:{};
    S.quests.forEach(q=>{const x=m[q.id];if(Array.isArray(x)){const at=num(x[0],0,9e15,0);if(at&&(rep||at>(q.doneAt||0))){q.doneAt=at;q.doneLog=sid(x[1])||null;q.res=x[2]==='fail'?'fail':null;if(fin(x[3]))q.pct=num(x[3],0,100,null)}}else if(rep)q.doneAt=q.doneLog=q.res=null});
-   toast(log.length+' catatan progres berhasil di-import')}
-  save();render()}catch(err){toast('File tidak cocok untuk jenis import ini')}
+   msg=log.length+' catatan progres berhasil di-import'}
+  save();render();toast(msg)}catch(err){toast('File tidak cocok untuk jenis import ini')}
  e.target.value=''});
 
 /* ---------- event ---------- */
@@ -306,9 +373,12 @@ const A={add:()=>openForm(),open:id=>openDetail(id),done:id=>{const q=get(id);if
  delnote:(id,b)=>{const q=get(id),el=b.closest('.note');q.notes=q.notes.filter(n=>n.id!==el.dataset.nid);el.remove();save()},
  prof:()=>openProf(),
  upd:async()=>{try{for(const k of await caches.keys())await caches.delete(k);for(const r of await navigator.serviceWorker.getRegistrations())await r.unregister()}catch(e){}location.reload()},
- exq:exportQ,imq:()=>pick('quests'),exp:exportP,imp:()=>pick('progress'),
- reset:()=>{if(confirm('Hapus SEMUA quest dan progres? Ini tidak bisa dibatalkan.')&&confirm('Yakin? Pastikan kamu sudah export cadangan.')){S={quests:[],log:[],profile:cleanP()};save();render()}}};
-document.addEventListener('click',e=>{const b=e.target.closest('[data-act],[data-nav],[data-type],[data-close],[data-pct],[data-pt],[data-rng],[data-lf],[data-day]');if(!b)return;const d=b.dataset;
+ exq:exportQ,imq:()=>pick('quests'),exp:exportP,imp:()=>pick('progress'),exn:exportN,imn:()=>pick('notes'),exa:exportA,ima:()=>pick('all'),
+ nadd:()=>openNote(),nopen:(_,b)=>openNote(b.closest('[data-nid]').dataset.nid),
+ ndel:()=>{const id=ui.ne;if(id&&confirm('Hapus note ini?')){S.notes=S.notes.filter(n=>n.id!==id);save();$('#nd').close();render()}},
+ reset:()=>{if(confirm('Hapus SEMUA quest dan progres? Ini tidak bisa dibatalkan.')&&confirm('Yakin? Pastikan kamu sudah export cadangan.')){S={quests:[],log:[],notes:[],profile:cleanP()};save();render()}}};
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act],[data-nav],[data-type],[data-close],[data-pct],[data-pt],[data-rng],[data-lf],[data-day],[data-nt]');if(!b)return;const d=b.dataset;
+ if('nt' in d){ui.nt=d.nt;return renderNotes()}
  if(d.pt){ui.pt=d.pt;return renderProf(true)}
  if(d.rng){ui.rng=+d.rng;return renderProf(true)}
  if(d.lf){ui.lf=d.lf;return renderProf(true)}
@@ -319,6 +389,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-act],[data
  if('close' in d)return b.closest('dialog').close();
  A[d.act]?.(b.closest('.row')?.dataset.id||ui.d,b)});
 $('#q').oninput=renderList;['#sort','#tf','#fst'].forEach(s=>$(s).onchange=renderList);
+$('#nq').oninput=renderNotes;['#nsort','#nst'].forEach(s=>$(s).onchange=renderNotes);
 const applyTheme=t=>{document.documentElement.dataset.theme=t;$('meta[name=theme-color]').content=t==='dark'?'#0e131b':'#f2f4f8'};
 $('#theme').onclick=()=>{const t=document.documentElement.dataset.theme==='dark'?'light':'dark';applyTheme(t);localStorage.setItem('quests.theme',t)};
 applyTheme(document.documentElement.dataset.theme);
@@ -329,4 +400,5 @@ if('serviceWorker' in navigator){const had=!!navigator.serviceWorker.controller;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had&&!rl){rl=true;location.reload()}});
  addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
 const ve=$('#ver');if(ve)ve.textContent=VER;
+renderBk();
 render();show('quests');

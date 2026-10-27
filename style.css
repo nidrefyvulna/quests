@@ -138,3 +138,25 @@ input[type=range]{width:100%;min-height:36px;padding:0;border:0;background:none;
 .bd .pbar{margin:0 0 4px}.bd.got .pbar i{background:var(--ok)}
 .day{display:flex;justify-content:space-between;gap:8px;align-items:baseline}.day span{font:400 .75rem system-ui,sans-serif;color:var(--mut);text-align:right}
 #ptabs{overflow:visible}#ptabs button{flex:1;padding:10px 2px;font-size:.92rem;text-align:center}
+/* rank */
+.pcard .rf{stroke:hsl(var(--rh) var(--rs) 46%)}
+.rk{font:700 1.2rem var(--ser);color:hsl(var(--rh) var(--rs) 38%)}
+.pips{display:flex;gap:5px;margin:3px 0 5px}.pips i{width:18px;height:6px;border-radius:3px;background:var(--ln)}.pips i.on{background:hsl(var(--rh) var(--rs) 46%)}
+[data-theme=dark] .pcard .rf,[data-theme=dark] .pips i.on{stroke:hsl(var(--rh) var(--rs) 62%)}[data-theme=dark] .pips i.on{background:hsl(var(--rh) var(--rs) 62%)}
+[data-theme=dark] .rk{color:hsl(var(--rh) var(--rs) 68%)}
+/* note */
+.nstrip{display:flex;flex-direction:column;gap:6px;padding-top:12px}.nstrip:empty{display:none}
+.nsh{display:flex;justify-content:space-between;align-items:center;font:700 .95rem var(--ser)}
+.nsh button{min-height:32px;padding:2px 10px;font-size:.8rem;border:0;background:none;color:var(--mut)}
+.ns{background:var(--sf);border:1px solid var(--ln);border-left:4px solid var(--ink);border-radius:12px;padding:10px 12px;cursor:pointer}
+.ns b{display:block;font:600 1rem var(--ser);overflow-wrap:anywhere}.ns span{font-size:.8rem;color:var(--mut)}
+.nlist{display:flex;flex-direction:column;gap:10px;margin:12px 0 90px}
+.ncard{background:var(--sf);border:1px solid var(--ln);border-radius:14px;padding:12px 14px;cursor:pointer}
+.ncard .pin{color:var(--warn)}
+.ncard p{margin:4px 0 0;color:var(--mut);font-size:.9rem;white-space:pre-wrap;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ncard.wait,.ncard.end,.ncard.arch{opacity:.6}
+.chip.tg{color:var(--ink);background:color-mix(in srgb,var(--ink) 9%,transparent)}
+.tags{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.tags button{flex:none;min-height:36px;padding:4px 12px;font-size:.85rem;border-radius:99px}.tags b{font-weight:500;margin-left:5px;color:var(--mut)}
+.tags .on{background:var(--btn);color:var(--bon);border-color:transparent}.tags .on b{color:inherit;opacity:.8}
+.tools #nq,.tools #nsort,.tools .tags{grid-column:1/-1}

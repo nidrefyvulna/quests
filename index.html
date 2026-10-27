@@ -24,6 +24,7 @@
 <main>
   <section id="v-quests">
     <div class="goal" id="goal"></div>
+    <div class="nstrip" id="nstrip"></div>
     <div class="tabs" id="types" role="tablist"></div>
     <div class="tools">
       <input type="search" id="q" placeholder="Cari quest…" aria-label="Cari quest">
@@ -48,6 +49,33 @@
     <div id="list" class="list"></div>
   </section>
 
+  <section id="v-notes" hidden>
+    <div class="tools">
+      <input type="search" id="nq" placeholder="Cari note…" aria-label="Cari note">
+      <select id="nsort" aria-label="Urutkan note" autocomplete="off">
+        <option value="eD">Diedit D (terbaru)</option>
+        <option value="cD">Dibuat D (terbaru)</option>
+        <option value="cA">Dibuat A (terlama)</option>
+        <option value="tA">Judul A (A ke Z)</option>
+        <option value="tD">Judul D (Z ke A)</option>
+        <option value="fA">Tampil Mulai A (terdekat)</option>
+        <option value="fD">Tampil Mulai D (terjauh)</option>
+        <option value="uA">Tampil Sampai A (terdekat)</option>
+        <option value="uD">Tampil Sampai D (terjauh)</option>
+      </select>
+      <span class="lbl">Tag</span>
+      <div class="tags" id="ntags"></div>
+      <span class="lbl">Tampilkan note yang</span>
+      <div class="days" id="nst" role="group" aria-label="Tampilkan note yang">
+        <label><input type="checkbox" value="show" checked autocomplete="off"><span>Sedang tampil</span></label>
+        <label><input type="checkbox" value="wait" autocomplete="off"><span>Belum tampil</span></label>
+        <label><input type="checkbox" value="end" autocomplete="off"><span>Sudah lewat</span></label>
+        <label><input type="checkbox" value="arch" autocomplete="off"><span>Arsip</span></label>
+      </div>
+    </div>
+    <div class="nlist" id="nlist"></div>
+  </section>
+
   <section id="v-log" hidden>
     <div id="prof"></div>
     <div class="tabs" id="ptabs" role="tablist"></div>
@@ -55,24 +83,30 @@
   </section>
 
   <section id="v-data" hidden>
-    <div class="panel"><h2>Quests</h2><p>Simpan atau pindahkan daftar quest beserta note-nya.</p>
-      <div class="btns"><button class="pri" data-act="exq">Export Quests</button><button data-act="imq">Import Quests</button></div></div>
-    <div class="panel"><h2>Progres</h2><p>Riwayat quest selesai, XP, dan status selesai saat ini.</p>
-      <div class="btns"><button class="pri" data-act="exp">Export Progres</button><button data-act="imp">Import Progres</button></div></div>
-    <div class="panel"><h2>Mode import</h2><p>Berlaku untuk import quests maupun progres.</p>
+    <div class="panel"><h2>Semua data</h2><p>Cadangan lengkap dalam satu file: quest beserta progresnya, log, note, dan profil.</p>
+      <div class="btns"><button class="pri" data-act="exa">Export Semua Data</button><button data-act="ima">Import Semua Data</button></div>
+      <p class="hint" id="bk"></p></div>
+    <div class="panel"><h2>Mode import</h2><p>Berlaku untuk semua tombol import di halaman ini.</p>
       <select id="mode" aria-label="Mode import"><option value="merge">Gabungkan dengan data yang ada</option><option value="replace">Ganti data yang ada</option></select></div>
-    <div class="panel"><h2>Reset</h2><p>Hapus semua quest dan progres dari perangkat ini.</p>
+    <div class="panel"><h2>Quests</h2><p>Daftar quest beserta note, checklist, dan jadwalnya.</p>
+      <div class="btns"><button class="pri" data-act="exq">Export Quests</button><button data-act="imq">Import Quests</button></div></div>
+    <div class="panel"><h2>Progres</h2><p>Riwayat quest selesai, XP, profil, dan status selesai saat ini.</p>
+      <div class="btns"><button class="pri" data-act="exp">Export Progres</button><button data-act="imp">Import Progres</button></div></div>
+    <div class="panel"><h2>Note</h2><p>Semua note beserta tag dan waktu tampilnya.</p>
+      <div class="btns"><button class="pri" data-act="exn">Export Note</button><button data-act="imn">Import Note</button></div></div>
+    <div class="panel"><h2>Aplikasi</h2><p>Jika tampilan belum berubah setelah update, perbarui aplikasi. Data tidak terhapus.</p>
+      <button data-act="upd">Perbarui aplikasi</button></div>
+    <div class="panel"><h2>Reset</h2><p>Hapus semua quest, note, dan progres dari perangkat ini.</p>
       <button class="danger" data-act="reset">Hapus semua data</button></div>
     <input type="file" id="file" accept=".json,application/json" hidden>
-    <div class="panel"><h2>Aplikasi</h2><p>Jika tampilan belum berubah setelah update, perbarui aplikasi. Data quest tidak terhapus.</p>
-      <button data-act="upd">Perbarui aplikasi</button></div>
-    <p class="foot">Data disimpan di perangkat ini. Export secara berkala sebagai cadangan. Versi aplikasi: <b id="ver">lama</b></p>
+    <p class="foot">Data disimpan di perangkat ini. Versi aplikasi: <b id="ver">lama</b></p>
   </section>
 </main>
 
 <button class="fab" id="fab" data-act="add" aria-label="Tambah quest">+</button>
 <nav class="nav">
   <button data-nav="quests" class="on">Quests</button>
+  <button data-nav="notes">Note</button>
   <button data-nav="log">Profil</button>
   <button data-nav="data">Data</button>
 </nav>
@@ -134,6 +168,20 @@
     <p class="hint">Hari libur tidak memutus streak kalau kamu tidak menyelesaikan quest di hari itu.</p>
   </div>
   <menu><button type="button" data-close>Batal</button><button class="pri">Simpan</button></menu>
+</form></dialog>
+<dialog id="nd"><form id="nf" autocomplete="off">
+  <h2 id="ntt">Note baru</h2>
+  <label>Judul (opsional)<input name="nj" maxlength="120"></label>
+  <label>Isi<textarea name="nb" rows="6" maxlength="5000"></textarea></label>
+  <label>Tag (pisahkan dengan koma)<input name="ng" maxlength="200" placeholder="contoh: kuliah, ide, penting"></label>
+  <div class="presets" id="nsug"></div>
+  <span class="lbl">Waktu tampil (opsional)</span>
+  <label>Tampil mulai<input name="nf" type="datetime-local"></label>
+  <label>Tampil sampai<input name="nu" type="datetime-local"></label>
+  <div class="presets"><button type="button" data-nw="today">Hari ini</button><button type="button" data-nw="tomorrow">Besok</button><button type="button" data-nw="week">7 hari</button><button type="button" data-nw="clear">Hapus waktu</button></div>
+  <p class="hint">Note hanya tampil di antara dua waktu ini. Kosongkan salah satu atau keduanya jika tidak dibatasi.</p>
+  <div class="days"><label><input type="checkbox" name="np"><span>Sematkan</span></label><label><input type="checkbox" name="na"><span>Arsipkan</span></label></div>
+  <menu><button type="button" class="danger" id="ndel" data-act="ndel">Hapus</button><span class="sp"></span><button type="button" data-close>Batal</button><button class="pri">Simpan</button></menu>
 </form></dialog>
 <div id="toast" role="status"></div>
 <script src="app.js"></script>
