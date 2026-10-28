@@ -58,8 +58,8 @@
         <option value="cA">Dibuat A (terlama)</option>
         <option value="tA">Judul A (A ke Z)</option>
         <option value="tD">Judul D (Z ke A)</option>
-        <option value="fA">Tampil Mulai A (terdekat)</option>
-        <option value="fD">Tampil Mulai D (terjauh)</option>
+        <option value="nA">Tampil Berikutnya A (terdekat)</option>
+        <option value="nD">Tampil Berikutnya D (terjauh)</option>
         <option value="uA">Tampil Sampai A (terdekat)</option>
         <option value="uD">Tampil Sampai D (terjauh)</option>
       </select>
@@ -169,19 +169,51 @@
   </div>
   <menu><button type="button" data-close>Batal</button><button class="pri">Simpan</button></menu>
 </form></dialog>
+<dialog id="rd" class="full" aria-label="Note">
+  <div class="rh">
+    <button class="ic" data-close aria-label="Tutup">✕</button>
+    <div class="mode" id="rmode" role="group" aria-label="Mode note"><button data-md="read" class="on">Baca</button><button data-md="edit">Edit</button></div>
+    <button data-act="nprop">Properti</button>
+  </div>
+  <div class="rbody" id="rbody"></div>
+</dialog>
 <dialog id="nd"><form id="nf" autocomplete="off">
-  <h2 id="ntt">Note baru</h2>
-  <label>Judul (opsional)<input name="nj" maxlength="120"></label>
-  <label>Isi<textarea name="nb" rows="6" maxlength="5000"></textarea></label>
+  <h2>Properti note</h2>
   <label>Tag (pisahkan dengan koma)<input name="ng" maxlength="200" placeholder="contoh: kuliah, ide, penting"></label>
   <div class="presets" id="nsug"></div>
-  <span class="lbl">Waktu tampil (opsional)</span>
+  <span class="lbl">Jadwal tampil</span>
+  <select name="rp" aria-label="Jadwal tampil">
+    <option value="">Tidak berulang</option><option value="d">Setiap hari</option>
+    <option value="w">Hari tertentu dalam seminggu</option><option value="m">Tanggal tertentu dalam sebulan</option>
+  </select>
+  <div id="wdw" hidden>
+    <div class="days" id="wdc">
+        <label><input type="checkbox" value="1"><span>Sen</span></label>
+        <label><input type="checkbox" value="2"><span>Sel</span></label>
+        <label><input type="checkbox" value="3"><span>Rab</span></label>
+        <label><input type="checkbox" value="4"><span>Kam</span></label>
+        <label><input type="checkbox" value="5"><span>Jum</span></label>
+        <label><input type="checkbox" value="6"><span>Sab</span></label>
+        <label><input type="checkbox" value="0"><span>Min</span></label>
+    </div>
+    <div class="presets"><button type="button" data-wd="0123456">Setiap hari</button><button type="button" data-wd="12345">Hari kerja</button><button type="button" data-wd="60">Akhir pekan</button><button type="button" data-wd="">Hapus pilihan</button></div>
+  </div>
+  <div id="mdw" hidden>
+    <div class="days dom" id="mdc"></div>
+    <p class="hint">Pilih "Akhir" untuk hari terakhir setiap bulan.</p>
+  </div>
+  <div id="twb" hidden>
+    <div class="two"><label>Dari jam<input name="t1" type="time"></label><label>Sampai jam<input name="t2" type="time"></label></div>
+    <div class="presets"><button type="button" data-tw="06:00-10:00">Pagi</button><button type="button" data-tw="11:00-14:00">Siang</button><button type="button" data-tw="15:00-18:00">Sore</button><button type="button" data-tw="19:00-22:00">Malam</button><button type="button" data-tw="clear">Sepanjang hari</button></div>
+    <p class="hint">Kosongkan jam agar tampil sepanjang hari. Jika jam sampai lebih awal dari jam dari, note tampil melewati tengah malam.</p>
+  </div>
+  <span class="lbl">Berlaku antara (opsional)</span>
   <label>Tampil mulai<input name="nf" type="datetime-local"></label>
   <label>Tampil sampai<input name="nu" type="datetime-local"></label>
   <div class="presets"><button type="button" data-nw="today">Hari ini</button><button type="button" data-nw="tomorrow">Besok</button><button type="button" data-nw="week">7 hari</button><button type="button" data-nw="clear">Hapus waktu</button></div>
-  <p class="hint">Note hanya tampil di antara dua waktu ini. Kosongkan salah satu atau keduanya jika tidak dibatasi.</p>
+  <p class="hint">Dengan jadwal berulang, rentang ini membatasi kapan jadwal berlaku. Tanpa jadwal berulang, note tampil terus di antara dua waktu ini.</p>
   <div class="days"><label><input type="checkbox" name="np"><span>Sematkan</span></label><label><input type="checkbox" name="na"><span>Arsipkan</span></label></div>
-  <menu><button type="button" class="danger" id="ndel" data-act="ndel">Hapus</button><span class="sp"></span><button type="button" data-close>Batal</button><button class="pri">Simpan</button></menu>
+  <menu><button type="button" class="danger" id="ndel" data-act="ndel">Hapus note</button><span class="sp"></span><button type="button" data-close>Batal</button><button class="pri">Simpan</button></menu>
 </form></dialog>
 <div id="toast" role="status"></div>
 <script src="app.js"></script>

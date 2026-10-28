@@ -160,3 +160,33 @@ input[type=range]{width:100%;min-height:36px;padding:0;border:0;background:none;
 .tags button{flex:none;min-height:36px;padding:4px 12px;font-size:.85rem;border-radius:99px}.tags b{font-weight:500;margin-left:5px;color:var(--mut)}
 .tags .on{background:var(--btn);color:var(--bon);border-color:transparent}.tags .on b{color:inherit;opacity:.8}
 .tools #nq,.tools #nsort,.tools .tags{grid-column:1/-1}
+/* pembaca note */
+dialog.full{width:min(760px,100%);height:96dvh;max-height:96dvh;padding:0;overflow:hidden}
+dialog.full[open]{display:flex;flex-direction:column}
+@media(min-width:760px){dialog.full{height:90dvh;max-height:90dvh}}
+.rh{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--ln);background:var(--sf)}
+.rh .ic{flex:none}.rh>button:last-child{flex:none;min-height:40px;padding:6px 14px}
+.mode{flex:1;display:flex;justify-content:center}
+.mode button{border:1px solid var(--ln);min-height:40px;padding:6px 16px;border-radius:0}
+.mode button:first-child{border-radius:10px 0 0 10px}.mode button:last-child{border-radius:0 10px 10px 0;border-left:0}
+.mode .on{background:var(--btn);color:var(--bon);border-color:transparent;font-weight:700}
+.rbody{flex:1;overflow:auto;padding:18px 20px 32px;-webkit-overflow-scrolling:touch}
+.rt{margin:0 0 8px;font:700 1.7rem/1.25 var(--ser);overflow-wrap:anywhere}
+.rtags{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.rm{margin:6px 0 18px}
+.md{font-size:1.06rem;line-height:1.7;overflow-wrap:anywhere}
+.md p{margin:0 0 .75em}.md ul,.md ol{margin:0 0 .75em;padding-left:1.4em}.md li{margin:.15em 0}.md li.ck{list-style:none;margin-left:-1.4em}
+.mh{font-family:var(--ser);margin:1.1em 0 .4em;line-height:1.3}h3.mh{font-size:1.4rem}h4.mh{font-size:1.2rem}h5.mh{font-size:1.05rem}
+.md blockquote{margin:0 0 .75em;padding:.1em 0 .1em 1em;border-left:3px solid var(--ln);color:var(--mut)}
+.md code{font:.92em ui-monospace,Menlo,Consolas,monospace;background:color-mix(in srgb,var(--mut) 16%,transparent);padding:1px 5px;border-radius:5px}
+.md a{color:inherit;text-underline-offset:2px}.md hr{border:0;border-top:1px solid var(--ln);margin:1em 0}
+.rfoot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:24px;padding-top:12px;border-top:1px solid var(--ln);color:var(--mut);font-size:.8rem}
+.rfoot button{min-height:36px;padding:4px 12px;font-size:.85rem;flex:none}
+input.rti{width:100%;border:0;border-bottom:1px solid var(--ln);border-radius:0;padding:6px 0;min-height:0;background:none;font:700 1.6rem var(--ser)}
+textarea.rta{width:100%;min-height:46dvh;border:0;border-radius:0;padding:10px 0;background:none;font-size:1.06rem;line-height:1.65;resize:none}
+.rti:focus-visible,.rta:focus-visible{outline:none}
+.dom{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.dom span{min-width:0;padding:0}.dom .lastd{grid-column:span 2}
+.ncard.rep{border-left:4px solid var(--ink)}
+dialog[open]{animation:sheet .22s ease-out}dialog[open]::backdrop{animation:fadein .2s ease-out}
+@keyframes sheet{from{transform:translateY(24px);opacity:0}}@keyframes fadein{from{opacity:0}}
+@media(prefers-reduced-motion:reduce){dialog[open],dialog[open]::backdrop{animation:none}}
+.rfoot span:first-child{white-space:nowrap}.rfoot span:last-child{text-align:right}

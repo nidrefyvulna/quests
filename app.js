@@ -1,5 +1,5 @@
 'use strict';
-const $=s=>document.querySelector(s),KEY='quests.v1',DAY=864e5,VER=7;
+const $=s=>document.querySelector(s),KEY='quests.v1',DAY=864e5,VER=8;
 const R=['I','II','III','IV','V','VI','VII','VIII','IX','X'];
 const TYPES={daily:'Daily',weekly:'Weekly',monthly:'Monthly',custom:'Custom'},TK=Object.keys(TYPES);
 const SPAN={m:6e4,h:36e5,d:DAY,w:7*DAY};
@@ -57,12 +57,28 @@ const cleanL=l=>l&&l.at?{id:sid(l.id)||uid(),qid:sid(l.qid),name:str(l.name,120)
 const cleanP=p=>({name:str(p&&p.name,24).trim()||'Petualang',goal:num(p&&p.goal,1,30,3),rest:[...new Set((Array.isArray(p&&p.rest)?p.rest:[]).map(Number).filter(d=>Number.isInteger(d)&&d>=0&&d<=6))].sort()});
 
 const parseTags=s=>{const seen=new Set(),out=[];String(s).split(/[,\n]/).forEach(t=>{t=t.replace(/^#+/,'').trim().replace(/\s+/g,' ').slice(0,24);const k=t.toLowerCase();if(t&&!seen.has(k)&&out.length<12){seen.add(k);out.push(t)}});return out};
+const cleanRep=r=>{if(!r||typeof r!=='object')return null;const k=['d','w','m'].includes(r.k)?r.k:null;if(!k)return null;
+ const hm=v=>/^([01]\d|2[0-3]):[0-5]\d$/.test(v)?v:null,
+  days=[...new Set((Array.isArray(r.days)?r.days:[]).map(Number).filter(d=>Number.isInteger(d)&&d>=0&&d<=6))].sort(),
+  dom=[...new Set((Array.isArray(r.dom)?r.dom:[]).map(Number).filter(d=>Number.isInteger(d)&&d>=0&&d<=31))].sort((a,b)=>a-b);
+ if(k==='w'&&!days.length||k==='m'&&!dom.length)return null;return{k,days,dom,t1:hm(r.t1),t2:hm(r.t2)}};   // d=tiap hari, w=hari dalam minggu, m=tanggal dalam bulan (0 = akhir bulan)
 const cleanN=n=>{n=n||{};const from=fin(n.from)?+n.from:null,until=fin(n.until)?+n.until:null,now=Date.now();
  const o={id:sid(n.id)||uid(),title:str(n.title,120).trim(),body:str(n.body,5000),tags:parseTags(Array.isArray(n.tags)?n.tags.join(','):''),pin:!!n.pin,arch:!!n.arch,
-  from,until:from!=null&&until!=null&&until<=from?null:until,created:num(n.created,0,9e15,now),edited:num(n.edited,0,9e15,now)};
+  from,until:from!=null&&until!=null&&until<=from?null:until,rep:cleanRep(n.rep),created:num(n.created,0,9e15,now),edited:num(n.edited,0,9e15,now)};
  return o.title||o.body.trim()?o:null};
-const nst=n=>{const t=Date.now();return n.arch?'arch':n.from!=null&&t<n.from?'wait':n.until!=null&&t>=n.until?'end':'show'};   // show, wait, end, arch
-const noteName=n=>n.title||n.body.split('\n')[0].slice(0,80)||'Tanpa judul';
+const dayOk=(r,d)=>r.k==='d'||(r.k==='w'&&r.days.includes(d.getDay()))||(r.k==='m'&&(r.dom.includes(d.getDate())||(r.dom.includes(0)&&new Date(d.getFullYear(),d.getMonth()+1,0).getDate()===d.getDate())));
+const hmMs=(d,hm)=>{const[h,m]=hm.split(':').map(Number),x=new Date(d);x.setHours(h,m,0,0);return x.getTime()};
+function repWin(r,D){if(!dayOk(r,D))return null;const d0=new Date(D);d0.setHours(0,0,0,0);const d1=new Date(d0);d1.setDate(d1.getDate()+1);   // jendela tampil yang DIMULAI pada hari D
+ const s=r.t1?hmMs(d0,r.t1):d0.getTime();let e=d1.getTime();if(r.t2)e=r.t2<=(r.t1||'00:00')?hmMs(d1,r.t2):hmMs(d0,r.t2);return{s,e}}
+function repNow(n,t){if(!n.rep)return null;for(let i=0;i<2;i++){const D=new Date(t);D.setDate(D.getDate()-i);const w=repWin(n.rep,D);if(w&&w.s<=t&&t<w.e)return w}return null}   // cek hari ini & kemarin (jendela lewat tengah malam)
+function nextWin(n,t){for(let i=0;i<=800;i++){const D=new Date(t);D.setDate(D.getDate()+i);const w=repWin(n.rep,D);if(w&&w.s>t)return w.s}return Infinity}
+const nst=n=>{const t=Date.now();if(n.arch)return'arch';if(n.until!=null&&t>=n.until)return'end';if(n.from!=null&&t<n.from)return'wait';return n.rep&&!repNow(n,t)?'wait':'show'};   // show, wait, end, arch
+function nextShow(n){const t=Date.now(),b=Math.max(t,n.from??-Infinity);let x;
+ if(n.rep)x=b>t&&repNow(n,b)?b:nextWin(n,b);else x=n.from!=null&&n.from>t?n.from:t;return n.until!=null&&x>=n.until?Infinity:x}
+const curEnd=n=>{const w=repNow(n,Date.now());return Math.min(w?w.e:Infinity,n.until??Infinity)};
+const plain=s=>s.replace(/^\s*(#{1,3}|[-*]|&#62;|>|\d+[.)])\s+/gm,'').replace(/\[[ xX]\]\s*/g,'').replace(/[*`]/g,'');
+const noteName=n=>n.title||plain(n.body.split('\n')[0]).slice(0,80)||'Tanpa judul';
+
 
 /* ---------- state ---------- */
 let S={quests:[],log:[],notes:[],profile:cleanP()},ui={type:'all',edit:null,d:null,imp:null,tab:'quests',pt:'sum',rng:7,lf:'all',nt:'',ne:null};
@@ -204,51 +220,104 @@ function openProf(){PF.pn.value=S.profile.name;PF.pg.value=S.profile.goal;
 if(PF)PF.addEventListener('submit',e=>{e.preventDefault();
  S.profile=cleanP({name:PF.pn.value,goal:PF.pg.value,rest:[...document.querySelectorAll('#prest input:checked')].map(c=>+c.value)});save();$('#pd').close();render()});
 
-/* ---------- note: tag, waktu tampil, sort, filter ---------- */
+/* ---------- note: baca, edit, properti, jadwal tampil berulang, tag, sort, filter ---------- */
 const nullLast=(f,dir)=>(a,b)=>{const x=f(a),y=f(b);if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;return dir*(x-y)};
-const nn=n=>noteName(n).toLowerCase();
+const nn=n=>noteName(n).toLowerCase(),nK=n=>{const s=nst(n);return s==='show'?Date.now():s==='wait'?(k=>k===Infinity?null:k)(nextShow(n)):null};
 const NSORT={eD:(a,b)=>b.edited-a.edited,cD:(a,b)=>b.created-a.created,cA:(a,b)=>a.created-b.created,tA:(a,b)=>nn(a).localeCompare(nn(b),'id'),tD:(a,b)=>nn(b).localeCompare(nn(a),'id'),
- fA:nullLast(n=>n.from,1),fD:nullLast(n=>n.from,-1),uA:nullLast(n=>n.until,1),uD:nullLast(n=>n.until,-1)};
+ nA:nullLast(nK,1),nD:nullLast(nK,-1),uA:nullLast(n=>n.until,1),uD:nullLast(n=>n.until,-1)};
 const tagStats=()=>{const c={};S.notes.forEach(n=>n.tags.forEach(t=>{const k=t.toLowerCase();(c[k]=c[k]||{t,k,n:0}).n++}));return Object.values(c).sort((a,b)=>b.n-a.n||a.t.localeCompare(b.t,'id'))};
 function visibleN(){const q=$('#nq').value.trim().toLowerCase(),want=new Set([...document.querySelectorAll('#nst input:checked')].map(c=>c.value)),cmp=NSORT[$('#nsort').value]||NSORT.eD,tg=ui.nt;
  return S.notes.filter(n=>want.has(nst(n))&&(!tg||n.tags.some(t=>t.toLowerCase()===tg))&&(!q||(n.title+' '+n.body+' '+n.tags.join(' ')).toLowerCase().includes(q)))
   .sort((a,b)=>b.pin-a.pin||cmp(a,b)||b.edited-a.edited)}
-function nTime(n,s){const t=Date.now();
- if(s==='wait')return `<span class="chip">Tampil mulai ${fmtS(n.from)}</span>`;
- if(s==='show'&&n.until!=null)return `<span class="chip ${n.until-t<36e5?'warn':''}">Tampil ${left(n.until-t)} lagi</span>`;
- if(s==='end')return `<span class="chip bad">Berakhir ${fmtDT(n.until)}</span>`;
- return s==='arch'?'<span class="chip">Arsip</span>':''}
-function nCard(n){const s=nst(n),pv=(n.title?n.body:n.body.split('\n').slice(1).join('\n')).trim();
- return `<article class="ncard${s==='show'?'':' '+s}" data-nid="${n.id}" data-act="nopen"><h3>${n.pin?'<span class="pin" aria-label="Disematkan">★</span> ':''}${esc(noteName(n))}</h3>${pv?`<p>${esc(pv)}</p>`:''}
+const repLabel=n=>{const r=n.rep,o=[1,2,3,4,5,6,0],p=v=>v.replace(':','.');
+ const w=r.k==='d'?'Setiap hari':r.k==='w'?(r.days.length===7?'Setiap hari':'Setiap '+o.filter(d=>r.days.includes(d)).map(d=>DN[d]).join(', ')):'Tanggal '+[...r.dom.filter(d=>d),...(r.dom.includes(0)?['akhir']:[])].join(', ')+' tiap bulan';
+ return w+(r.t1&&r.t2?' pukul '+p(r.t1)+' sampai '+p(r.t2):r.t1?' mulai '+p(r.t1):r.t2?' sampai '+p(r.t2):'')};
+function nTime(n,s){const t=Date.now();let h=n.rep?`<span class="chip">${repLabel(n)}</span>`:'';
+ if(s==='show'){const e=curEnd(n);if(e<Infinity)h+=`<span class="chip ${e-t<36e5?'warn':''}">Tampil ${left(e-t)} lagi</span>`}
+ else if(s==='wait'){const x=nextShow(n);h+=x<Infinity?`<span class="chip">Tampil ${n.rep?'lagi ':'mulai '}${fmtS(x)}</span>`:'<span class="chip bad">Tidak tampil lagi</span>'}
+ else if(s==='end')h+=`<span class="chip bad">Berakhir ${fmtDT(n.until)}</span>`;
+ else if(s==='arch')h+='<span class="chip">Arsip</span>';
+ return h}
+function nCard(n){const s=nst(n),pv=plain(n.title?n.body:n.body.split('\n').slice(1).join('\n')).trim();
+ return `<article class="ncard${s==='show'?'':' '+s}${n.rep?' rep':''}" data-nid="${n.id}" data-act="nopen"><h3>${n.pin?'<span class="pin" aria-label="Disematkan">★</span> ':''}${esc(noteName(n))}</h3>${pv?`<p>${esc(pv)}</p>`:''}
 <div class="chips">${n.tags.map(t=>`<span class="chip tg">#${esc(t)}</span>`).join('')}${nTime(n,s)}</div></article>`}
 function renderNotes(){const ts=tagStats();if(ui.nt&&!ts.some(x=>x.k===ui.nt))ui.nt='';
  $('#ntags').innerHTML=`<button data-nt="" class="${ui.nt?'':'on'}">Semua</button>`+ts.map(x=>`<button data-nt="${esc(x.k)}" class="${ui.nt===x.k?'on':''}">#${esc(x.t)}<b>${x.n}</b></button>`).join('');
- const L=visibleN();$('#nlist').innerHTML=L.length?L.map(nCard).join(''):`<div class="empty">${S.notes.length?'Tidak ada note dengan filter ini.<br>Coba centang status lain atau pilih tag Semua.':'Belum ada note.<br>Tekan + untuk membuat note pertamamu.'}</div>`}
+ const L=visibleN();$('#nlist').innerHTML=L.length?L.map(nCard).join(''):`<div class="empty">${S.notes.length?'Tidak ada note dengan filter ini.<br>Note berjadwal yang belum waktunya ada di status "Belum tampil".':'Belum ada note.<br>Tekan + untuk membuat note pertamamu.'}</div>`}
 function renderStrip(){const el=$('#nstrip');if(!el)return;                       // note berjadwal yang sedang tampil, ditampilkan di tab Quests
- const L=S.notes.filter(n=>(n.from!=null||n.until!=null)&&nst(n)==='show').sort((a,b)=>(a.until==null)-(b.until==null)||a.until-b.until||0).slice(0,3);
- el.innerHTML=L.length?`<div class="nsh">Note aktif<button data-nav="notes">Semua note</button></div>`+L.map(n=>`<div class="ns" data-nid="${n.id}" data-act="nopen"><b>${esc(noteName(n))}</b><span>${n.until!=null?'Tampil sampai '+fmtS(n.until):'Tampil sejak '+fmtS(n.from)}</span></div>`).join(''):''}
-const NF=$('#nf');
+ const L=S.notes.filter(n=>(n.rep||n.from!=null||n.until!=null)&&nst(n)==='show').sort((a,b)=>curEnd(a)-curEnd(b)||0).slice(0,3);
+ el.innerHTML=L.length?`<div class="nsh">Note aktif<button data-nav="notes">Semua note</button></div>`+L.map(n=>{const e=curEnd(n);return `<div class="ns" data-nid="${n.id}" data-act="nopen"><b>${esc(noteName(n))}</b><span>${e<Infinity?'Tampil sampai '+fmtS(e):'Sedang tampil'}</span></div>`}).join(''):''}
+
+/* pembaca / editor note */
+const RD=$('#rd'),NF=$('#nf');
+const curNote=()=>S.notes.find(x=>x.id===ui.ne);
+const wc=s=>s.trim()?s.trim().split(/\s+/).length:0;
+function md(src){const out=[];let list=null;                                            // format sederhana: # judul, - daftar, - [ ] centang, 1. daftar, > kutipan, **tebal**, *miring*, `kode`, tautan
+ const inl=t=>t.replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/(^|[\s(])\*([^*\s][^*]*)\*/g,'$1<i>$2</i>')
+  .replace(/(https?:\/\/[^\s<]+?)([.,;:!?)]*)(?=\s|$)/g,'<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>$2');
+ const flush=()=>{if(list){out.push(`<${list.t}>${list.i.join('')}</${list.t}>`);list=null}};
+ const add=(t,h)=>{if(!list||list.t!==t){flush();list={t,i:[]}}list.i.push(h)};
+ for(const l of esc(src).split('\n')){let m;
+  if(m=l.match(/^\s*[-*] \[([ xX])\] (.*)$/))add('ul',`<li class="ck">${m[1]===' '?'☐':'☑'} ${inl(m[2])}</li>`);
+  else if(m=l.match(/^\s*[-*] (.*)$/))add('ul',`<li>${inl(m[1])}</li>`);
+  else if(m=l.match(/^\s*\d+[.)] (.*)$/))add('ol',`<li>${inl(m[1])}</li>`);
+  else{flush();if(m=l.match(/^(#{1,3}) (.*)$/))out.push(`<h${m[1].length+2} class="mh">${inl(m[2])}</h${m[1].length+2}>`);
+   else if(m=l.match(/^&#62; (.*)$/))out.push(`<blockquote>${inl(m[1])}</blockquote>`);
+   else if(/^-{3,}$/.test(l.trim()))out.push('<hr>');
+   else if(l.trim())out.push(`<p>${inl(l)}</p>`)}}
+ flush();return out.join('')}
+const tagsH=n=>n.tags.length?`<div class="rtags">${n.tags.map(t=>`<span class="chip tg">#${esc(t)}</span>`).join('')}</div>`:'';
+const metaH=(n,s)=>`<div class="chips rm">${n.pin?'<span class="chip">Disematkan</span>':''}${nTime(n,s)}</div>`;
+const readH=(n,s)=>`${n.title?`<h2 class="rt">${esc(n.title)}</h2>`:''}${tagsH(n)}${metaH(n,s)}
+<div class="md">${n.body.trim()?md(n.body):'<p class="hint">Note ini belum punya isi. Tekan Edit untuk mulai menulis.</p>'}</div>
+<div class="rfoot"><span>Diedit ${fmtDT(n.edited)}</span><button data-act="ncopy">Salin isi</button></div>`;
+const editH=(n,s)=>`<input class="rti" id="rti" placeholder="Judul" maxlength="120" value="${esc(n.title)}" aria-label="Judul">${tagsH(n)}${metaH(n,s)}
+<textarea class="rta" id="rta" placeholder="Tulis isi note…" maxlength="5000" aria-label="Isi note">${esc(n.body)}</textarea>
+<div class="rfoot"><span id="rwc"></span><span>Tersimpan otomatis. Tag dan jadwal diatur lewat Properti.</span></div>`;
+function drawNote(){const n=curNote();if(!n)return;
+ document.querySelectorAll('#rmode button').forEach(b=>b.classList.toggle('on',b.dataset.md===ui.rm));
+ $('#rbody').innerHTML=ui.rm==='read'?readH(n,nst(n)):editH(n,nst(n));if(ui.rm==='edit')$('#rwc').textContent=wc(n.body)+' kata'}
+function openNote(id){let n=id&&S.notes.find(x=>x.id===id),mode='read';
+ if(!n){const t=Date.now();n={id:uid(),title:'',body:'',tags:[],pin:false,arch:false,from:null,until:null,rep:null,created:t,edited:t};S.notes.push(n);mode='edit'}
+ ui.ne=n.id;ui.rm=mode;drawNote();RD.showModal();if(mode==='edit')$('#rti').focus()}
+function setMode(m){if(ui.rm===m||!curNote())return;ui.rm=m;save();drawNote();$('#rbody').scrollTop=0;if(m==='edit')$('#rta').focus()}
+async function copyNote(b){const n=curNote();if(!n)return;
+ try{await navigator.clipboard.writeText((n.title?n.title+'\n\n':'')+n.body);b.textContent='Tersalin'}catch(e){b.textContent='Gagal menyalin'}setTimeout(()=>{b.textContent='Salin isi'},1600)}
+let tn;RD.addEventListener('input',e=>{const n=curNote(),t=e.target;if(!n)return;
+ if(t.id==='rti')n.title=t.value;else if(t.id==='rta'){n.body=t.value;$('#rwc').textContent=wc(t.value)+' kata'}else return;
+ n.edited=Date.now();clearTimeout(tn);tn=setTimeout(save,300)});
+RD.addEventListener('close',()=>{const n=curNote();if(n&&!n.title.trim()&&!n.body.trim())S.notes=S.notes.filter(x=>x!==n);ui.ne=null;save();render()});
+/* properti note: tag, jadwal tampil, rentang waktu, sematkan, arsip */
 const ntSug=()=>{const cur=parseTags(NF.ng.value).map(t=>t.toLowerCase());
  $('#nsug').innerHTML=tagStats().filter(x=>!cur.includes(x.k)).slice(0,10).map(x=>`<button type="button" data-tag="${esc(x.t)}">#${esc(x.t)}</button>`).join('')};
-function openNote(id){const n=id?S.notes.find(x=>x.id===id):null;ui.ne=n?n.id:null;$('#ntt').textContent=n?'Edit note':'Note baru';
- NF.nj.value=n?n.title:'';NF.nb.value=n?n.body:'';NF.ng.value=n?n.tags.join(', '):'';NF.nf.value=n&&n.from!=null?loc(n.from):'';NF.nu.value=n&&n.until!=null?loc(n.until):'';
- NF.np.checked=!!(n&&n.pin);NF.na.checked=!!(n&&n.arch);$('#ndel').hidden=!n;ntSug();$('#nd').showModal();(n?NF.nb:NF.nj).focus()}
+function syncP(){const k=NF.rp.value;$('#wdw').hidden=k!=='w';$('#mdw').hidden=k!=='m';$('#twb').hidden=!k}
+function openProps(){const n=curNote();if(!n)return;const r=n.rep;
+ NF.ng.value=n.tags.join(', ');NF.rp.value=r?r.k:'';NF.t1.value=r&&r.t1||'';NF.t2.value=r&&r.t2||'';
+ document.querySelectorAll('#wdc input').forEach(c=>c.checked=!!(r&&r.k==='w'&&r.days.includes(+c.value)));
+ document.querySelectorAll('#mdc input').forEach(c=>c.checked=!!(r&&r.k==='m'&&r.dom.includes(+c.value)));
+ NF.nf.value=n.from!=null?loc(n.from):'';NF.nu.value=n.until!=null?loc(n.until):'';NF.np.checked=n.pin;NF.na.checked=n.arch;syncP();ntSug();$('#nd').showModal()}
+$('#mdc').innerHTML=[...Array(31)].map((_,i)=>`<label><input type="checkbox" value="${i+1}"><span>${i+1}</span></label>`).join('')+'<label class="lastd"><input type="checkbox" value="0"><span>Akhir</span></label>';
 if(NF){
- NF.addEventListener('click',e=>{const b=e.target.closest('[data-tag],[data-nw]');if(!b)return;
-  if(b.dataset.tag){NF.ng.value=parseTags(NF.ng.value+','+b.dataset.tag).join(', ');ntSug();return}
-  const n=new Date(),k=b.dataset.nw;let f=null,u=null;
+ NF.addEventListener('click',e=>{const b=e.target.closest('[data-tag],[data-nw],[data-wd],[data-tw]');if(!b)return;const d=b.dataset;
+  if(d.tag){NF.ng.value=parseTags(NF.ng.value+','+d.tag).join(', ');ntSug();return}
+  if(d.wd!==undefined){document.querySelectorAll('#wdc input').forEach(c=>c.checked=d.wd.includes(c.value));return}
+  if(d.tw){if(d.tw==='clear')NF.t1.value=NF.t2.value='';else{const[a,z]=d.tw.split('-');NF.t1.value=a;NF.t2.value=z}return}
+  const n=new Date(),k=d.nw;let f=null,u=null;
   if(k==='today'){const x=new Date(n);x.setHours(23,59,0,0);f=n.getTime();u=x.getTime()}
   else if(k==='tomorrow'){const s=new Date(n);s.setDate(s.getDate()+1);s.setHours(0,0,0,0);const x=new Date(s);x.setHours(23,59,0,0);f=s.getTime();u=x.getTime()}
   else if(k==='week'){f=n.getTime();u=n.getTime()+7*DAY}
   NF.nf.value=f?loc(f):'';NF.nu.value=u?loc(u):''});
  NF.addEventListener('input',e=>{if(e.target===NF.ng)ntSug()});
- NF.addEventListener('submit',e=>{e.preventDefault();const title=NF.nj.value.trim(),body=NF.nb.value.trim();
-  if(!title&&!body){alert('Isi judul atau isi note.');return}
+ NF.addEventListener('change',e=>{if(e.target===NF.rp)syncP()});
+ NF.addEventListener('submit',e=>{e.preventDefault();const n=curNote();if(!n)return;const k=NF.rp.value;
+  const days=[...document.querySelectorAll('#wdc input:checked')].map(c=>+c.value),dom=[...document.querySelectorAll('#mdc input:checked')].map(c=>+c.value);
+  if(k==='w'&&!days.length){alert('Pilih minimal satu hari dalam seminggu.');return}
+  if(k==='m'&&!dom.length){alert('Pilih minimal satu tanggal dalam sebulan.');return}
+  let t1=NF.t1.value||null,t2=NF.t2.value||null;if(t1&&t1===t2)t1=t2=null;
   const from=NF.nf.value?new Date(NF.nf.value).getTime():null,until=NF.nu.value?new Date(NF.nu.value).getTime():null;
   if(from!=null&&until!=null&&until<=from){alert('Waktu tampil sampai harus setelah waktu tampil mulai.');return}
-  const n=Date.now(),o=ui.ne&&S.notes.find(x=>x.id===ui.ne),data={title,body,tags:parseTags(NF.ng.value),from,until,pin:NF.np.checked,arch:NF.na.checked,edited:n};
-  if(o)Object.assign(o,data);else S.notes.push({id:uid(),created:n,...data});
-  save();$('#nd').close();render()})}
+  Object.assign(n,{tags:parseTags(NF.ng.value),rep:k?{k,days:k==='w'?days:[],dom:k==='m'?dom:[],t1,t2}:null,from,until,pin:NF.np.checked,arch:NF.na.checked,edited:Date.now()});
+  save();$('#nd').close();drawNote();render()})}
 
 function render(){refresh();const w=new Set(S.quests.filter(q=>status(q)==='wait').map(q=>q.id)),nw=new Set(S.notes.filter(n=>nst(n)==='wait').map(n=>n.id)),msg=[],
  up=S.quests.filter(q=>ui.w&&ui.w.has(q.id)&&!w.has(q.id)&&status(q)==='on'),un=S.notes.filter(n=>ui.nw&&ui.nw.has(n.id)&&!nw.has(n.id)&&nst(n)==='show');ui.w=w;ui.nw=nw;
@@ -375,10 +444,12 @@ const A={add:()=>openForm(),open:id=>openDetail(id),done:id=>{const q=get(id);if
  upd:async()=>{try{for(const k of await caches.keys())await caches.delete(k);for(const r of await navigator.serviceWorker.getRegistrations())await r.unregister()}catch(e){}location.reload()},
  exq:exportQ,imq:()=>pick('quests'),exp:exportP,imp:()=>pick('progress'),exn:exportN,imn:()=>pick('notes'),exa:exportA,ima:()=>pick('all'),
  nadd:()=>openNote(),nopen:(_,b)=>openNote(b.closest('[data-nid]').dataset.nid),
- ndel:()=>{const id=ui.ne;if(id&&confirm('Hapus note ini?')){S.notes=S.notes.filter(n=>n.id!==id);save();$('#nd').close();render()}},
+ ndel:()=>{const id=ui.ne;if(id&&confirm('Hapus note ini?')){S.notes=S.notes.filter(n=>n.id!==id);ui.ne=null;save();$('#nd').close();RD.close();render()}},
+ nprop:()=>openProps(),ncopy:(_,b)=>copyNote(b),
  reset:()=>{if(confirm('Hapus SEMUA quest dan progres? Ini tidak bisa dibatalkan.')&&confirm('Yakin? Pastikan kamu sudah export cadangan.')){S={quests:[],log:[],notes:[],profile:cleanP()};save();render()}}};
-document.addEventListener('click',e=>{const b=e.target.closest('[data-act],[data-nav],[data-type],[data-close],[data-pct],[data-pt],[data-rng],[data-lf],[data-day],[data-nt]');if(!b)return;const d=b.dataset;
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act],[data-nav],[data-type],[data-close],[data-pct],[data-pt],[data-rng],[data-lf],[data-day],[data-nt],[data-md]');if(!b)return;const d=b.dataset;
  if('nt' in d){ui.nt=d.nt;return renderNotes()}
+ if(d.md){setMode(d.md);return}
  if(d.pt){ui.pt=d.pt;return renderProf(true)}
  if(d.rng){ui.rng=+d.rng;return renderProf(true)}
  if(d.lf){ui.lf=d.lf;return renderProf(true)}
