@@ -1,6 +1,9 @@
 'use strict';
-const $=s=>document.querySelector(s),KEY='quests.v1',DAY=864e5,VER=10;
+const $=s=>document.querySelector(s),KEY='quests.v1',DAY=864e5,VER=11;
 const R=['I','II','III','IV','V','VI','VII','VIII','IX','X'];
+/* XP quest menentukan tier otomatis, tanpa batas: Tier T = 2(T-1)^2+1 sampai 2T^2 XP (I: 1-2, II: 3-8, III: 9-18, ...) */
+const XMAX=1e7,tierMin=t=>2*(t-1)*(t-1)+1,tierMax=t=>2*t*t;
+const tierOf=xp=>{xp=Math.max(1,xp);let t=Math.ceil(Math.sqrt(xp/2));while(2*t*t<xp)t++;while(t>1&&2*(t-1)*(t-1)>=xp)t--;return t};
 const TYPES={daily:'Daily',weekly:'Weekly',monthly:'Monthly',custom:'Custom'},TK=Object.keys(TYPES);
 const SPAN={m:6e4,h:36e5,d:DAY,w:7*DAY};
 const num=(v,a,b,d)=>{v=Math.round(+v);return Number.isFinite(v)?Math.min(b,Math.max(a,v)):d};
@@ -9,7 +12,8 @@ const str=(v,n)=>String(v??'').slice(0,n);
 const sid=v=>str(v,40).replace(/[^\w-]/g,'');
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
-const hue=t=>200-(t-1)*22;               // tier I = biru dingin ... tier X = merah panas
+const tb=(t,a='',st='')=>{const x=roman(t),n=x.length;return `<span class="tier"${a} style="${st}${n>4?'--k:'+Math.max(.4,4.2/n).toFixed(2):''}">${x}</span>`};   // badge tier: angka romawi, mengecil kalau panjang
+const hue=t=>t<=10?200-(t-1)*22:Math.max(262,360-(t-10)*12);               // tier I = biru dingin ... tier X = merah panas
 
 /* ---------- Quest Dimulai (jadwal & siklus) dan Quest Berakhir ---------- */
 function cleanS(s){if(!s||typeof s!=='object')return null;
@@ -40,19 +44,20 @@ function firstStart(q,t0){const b=Math.max(t0,q.start||0);                   // 
 const endAt=q=>q.dl.k==='after'?q.cs+dlSpan(q.dl):q.dl.k==='custom'?q.dl.at:Infinity;
 
 /* ---------- sanitasi data (dipakai saat load & import; juga migrasi dari versi lama) ---------- */
-function cleanQ(q,keep){q=q||{};const w=q.dl||{},mig=w.k==='day'||w.k==='week',sc=cleanS(q.sch);
+function cleanQ(q,keep){q=q||{};const w=q.dl||{},mig=w.k==='day'||w.k==='week',sc=cleanS(q.sch),xp=fin(q.xp)?num(q.xp,1,XMAX,10):num(q.tier,1,10,1)*10;
  let k=mig?'after':['after','custom'].includes(w.k)?w.k:'none';
  const at=k==='custom'&&fin(w.at)?+w.at:null;if(k==='custom'&&at===null)k='none';
  const dl={k,at,n:mig?1:num(w.n,1,9999,1),u:mig?(w.k==='day'?'d':'w'):(['m','h','d','w'].includes(w.u)?w.u:'d')};
- const o={id:sid(q.id)||uid(),name:str(q.name,120)||'Tanpa nama',desc:str(q.desc,1000),tier:num(q.tier,1,10,1),
+ const o={id:sid(q.id)||uid(),name:str(q.name,120)||'Tanpa nama',desc:str(q.desc,1000),xp,tier:tierOf(xp),
   type:TK.includes(q.type)?q.type:'daily',every:num(q.every,0,3650,0),dl,sch:sc,start:fin(q.start)?+q.start:null,
   notes:(Array.isArray(q.notes)?q.notes:[]).slice(0,200).map(n=>({id:sid(n&&n.id)||uid(),text:str(n&&n.text,5000),ts:num(n&&n.ts,0,9e15,Date.now())})),
   created:num(q.created,0,9e15,Date.now()),doneAt:keep&&q.doneAt?num(q.doneAt,0,9e15,null):null,doneLog:keep&&q.doneLog?sid(q.doneLog):null,res:keep&&q.doneAt&&q.res==='fail'?'fail':null,pct:keep&&fin(q.pct)?num(q.pct,0,100,null):null,
   cl:(Array.isArray(q.cl)?q.cl:[]).slice(0,100).map(i=>({id:sid(i&&i.id)||uid(),t:str(i&&i.t,200),d:!!(keep&&i&&i.d)})).filter(i=>i.t.trim())};
  o.cs=fin(q.cs)?+q.cs:mig&&fin(w.at)?+w.at-dlSpan(dl):firstStart(o,sc?sc.at:o.created);
  return o}
-const cleanL=l=>l&&l.at?{id:sid(l.id)||uid(),qid:sid(l.qid),name:str(l.name,120),tier:num(l.tier,1,10,1),
- type:TK.includes(l.type)?l.type:'custom',xp:num(l.xp,0,1e4,10),at:num(l.at,0,9e15,Date.now()),res:l.res==='fail'?'fail':'done',pct:num(l.pct,0,100,l.res==='fail'?0:100)}:null;
+const lbx=l=>fin(l.bx)?num(l.bx,1,XMAX,10):num(l.tier,1,10,1)*10;   // XP dasar quest saat selesai (log lama: tier x 10)
+const cleanL=l=>l&&l.at?{id:sid(l.id)||uid(),qid:sid(l.qid),name:str(l.name,120),tier:tierOf(lbx(l)),bx:lbx(l),
+ type:TK.includes(l.type)?l.type:'custom',xp:num(l.xp,0,XMAX,10),at:num(l.at,0,9e15,Date.now()),res:l.res==='fail'?'fail':'done',pct:num(l.pct,0,100,l.res==='fail'?0:100)}:null;
 
 const cleanP=p=>({name:str(p&&p.name,24).trim()||'Petualang',goal:num(p&&p.goal,1,30,3),rest:[...new Set((Array.isArray(p&&p.rest)?p.rest:[]).map(Number).filter(d=>Number.isInteger(d)&&d>=0&&d<=6))].sort()});
 
@@ -119,21 +124,21 @@ const newRun=q=>{q.res=null;q.pct=null;q.cl.forEach(i=>i.d=false)};      // sikl
 const clItems=q=>q.cl.filter(i=>i.t.trim());
 const clPct=q=>{const a=clItems(q);return a.length?Math.round(a.filter(i=>i.d).length/a.length*100):null};
 const eff=q=>q.pct!=null?q.pct:(clPct(q)??100);                           // slider (manual) menang; kalau kosong ikut checklist; tanpa keduanya 100%
-const pts=q=>Math.round(q.tier*10*eff(q)/100);
+const pts=q=>Math.round(q.xp*eff(q)/100);
 
 /* ---------- sort / filter ---------- */
 const cmpDl=dir=>(a,b,s,e)=>{const x=e(a),y=e(b);if(x===y)return 0;if(x===Infinity)return 1;if(y===Infinity)return -1;return dir*(x-y)};
-const SORTS={stA:(a,b,s)=>s(a)-s(b),stD:(a,b,s)=>s(b)-s(a),dlA:cmpDl(1),dlD:cmpDl(-1),tierD:(a,b)=>b.tier-a.tier,tierA:(a,b)=>a.tier-b.tier},ORD={on:0,wait:1,done:2,fail:3,end:4};
+const SORTS={stA:(a,b,s)=>s(a)-s(b),stD:(a,b,s)=>s(b)-s(a),dlA:cmpDl(1),dlD:cmpDl(-1),tierD:(a,b)=>b.xp-a.xp,tierA:(a,b)=>a.xp-b.xp},ORD={on:0,wait:1,done:2,fail:3,end:4};
 function visible(){const q=$('#q').value.trim().toLowerCase(),tf=$('#tf').value,cmp=SORTS[$('#sort').value]||SORTS.stA,
  want=new Set([...document.querySelectorAll('#fst input:checked')].map(c=>c.value));
  const nx=x=>!want.has(status(x))&&back(x),                                    // tampil lewat Belum dimulai: pakai jadwal siklus berikutnya
   st=x=>nx(x)?nextRun(x):x.cs,en=x=>nx(x)?(x.dl.k==='after'?nextRun(x)+dlSpan(x.dl):x.dl.k==='custom'?x.dl.at:Infinity):endAt(x),gr=x=>nx(x)?'wait':status(x);
  return S.quests.filter(x=>(ui.type==='all'||x.type===ui.type)&&(want.has(status(x))||want.has('wait')&&back(x))&&(!tf||x.tier==tf)&&
   (!q||(x.name+' '+x.desc+' '+x.notes.map(n=>n.text).join(' ')).toLowerCase().includes(q)))
-  .sort((a,b)=>ORD[gr(a)]-ORD[gr(b)]||cmp(a,b,st,en)||b.tier-a.tier||a.created-b.created)}
+  .sort((a,b)=>ORD[gr(a)]-ORD[gr(b)]||cmp(a,b,st,en)||b.xp-a.xp||a.created-b.created)}
 
 /* ---------- render ---------- */
-function chips(q){const n=Date.now(),s=status(q),e=endAt(q);let h=`<span class="chip">${typeLabel(q)}</span>`;
+function chips(q){const n=Date.now(),s=status(q),e=endAt(q);let h=`<span class="chip">${typeLabel(q)}</span><span class="chip">${q.xp} XP</span>`;
  if(q.sch)h+=`<span class="chip">Dimulai ${schLabel(q)}</span>`;
  if(s==='on')h+=e===Infinity?'<span class="chip">Tanpa batas waktu</span>':`<span class="chip ${e-n<36e5?'bad':e-n<DAY?'warn':''}">Berakhir dalam ${left(e-n)}</span>`;
  if(s==='wait')h+=`<span class="chip">Dimulai ${fmtR(q.cs)}</span>`;
@@ -141,13 +146,13 @@ function chips(q){const n=Date.now(),s=status(q),e=endAt(q);let h=`<span class="
  if(s==='end'){h+=`<span class="chip bad">Berakhir ${fmtDT(e)}</span>`;const ns=q.dl.k==='custom'?Infinity:nextStart(q,e,true,q.cs);if(ns!==Infinity)h+=`<span class="chip">Dimulai lagi ${fmtR(ns)}</span>`}
  return h}
 function card(q){const s=status(q),it=clItems(q),dn=it.filter(i=>i.d).length,p=s==='on'&&(q.cl.length||q.pct!=null),closed=s==='done'||s==='fail';
- return `<article class="row${s==='on'?'':' '+s}" data-id="${q.id}" style="--t:${hue(q.tier)}"><span class="tier" data-act="open">${R[q.tier-1]}</span>
+ return `<article class="row${s==='on'?'':' '+s}" data-id="${q.id}" style="--t:${hue(q.tier)}">${tb(q.tier,' data-act="open"')}
 <div class="body" data-act="open"><h3>${esc(q.name)}</h3>${q.desc?`<p>${esc(q.desc)}</p>`:''}
 <div class="chips">${chips(q)}${p?`<span class="chip">${eff(q)}% selesai</span>`:''}${p&&it.length?`<span class="chip">${dn}/${it.length} item</span>`:''}${q.notes.length?`<span class="chip">${q.notes.length} note</span>`:''}</div>${p?`<div class="pbar"><i style="width:${eff(q)}%"></i></div>`:''}</div>
 <button class="chk" data-act="${closed?'undo':'done'}" aria-label="${s==='fail'?'Batalkan gagal':s==='done'?'Batalkan selesai':'Tandai selesai'}">${s==='done'?'✓':s==='fail'?'✕':''}</button></article>`}
 function renderTypes(){const n=t=>S.quests.filter(q=>(t==='all'||q.type===t)&&status(q)==='on').length;
  $('#types').innerHTML=[['all','Semua'],...Object.entries(TYPES)].map(([k,l])=>`<button role="tab" data-type="${k}" class="${ui.type===k?'on':''}">${l}<b>${n(k)}</b></button>`).join('')}
-function renderList(){const L=visible();
+function renderList(){fillTf();const L=visible();
  $('#list').innerHTML=L.length?L.map(card).join(''):`<div class="empty">${S.quests.length?'Tidak ada quest dengan status yang dipilih.<br>Centang status lain di atas untuk melihat quest lainnya.':'Belum ada quest.<br>Tekan + untuk membuat quest pertamamu.'}</div>`}
 /* ---------- rank (gaya Mobile Legends), profil, statistik, log ---------- */
 const RK=['Warrior','Elite','Master','Grandmaster','Epic','Legend','Mythic'],RH=[[28,38],[210,14],[45,72],[205,72],[268,55],[22,82],[345,76]],DAYL=['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
@@ -165,10 +170,10 @@ function renderGoal(){const el=$('#goal');if(!el)return;const g=S.profile.goal,n
  el.innerHTML=`<span>Target hari ini <b>${n} dari ${g}</b>${n>=g?', tercapai':''}</span><div class="pbar"><i style="width:${Math.min(100,Math.round(n/g*100))}%"></i></div>`}
 function analyze(){                                       // semua angka profil dihitung dari log
  const okL=S.log.filter(l=>l.res!=='fail'),fl=S.log.filter(l=>l.res==='fail'),rest=new Set(S.profile.rest),byDay={};
- const a={...lvOf(S.log.reduce((s,l)=>s+l.xp,0)),total:okL.length,fail:fl.length,byDay,tier:Array(10).fill(0),wd:Array(7).fill(0),hr:Array(24).fill(0),perfect:0,top:{},bad:{}};
+ const a={...lvOf(S.log.reduce((s,l)=>s+l.xp,0)),total:okL.length,fail:fl.length,byDay,tier:Array(11).fill(0),wd:Array(7).fill(0),hr:Array(24).fill(0),perfect:0,top:{},bad:{}};
  fl.forEach(l=>{a.bad[l.name]=(a.bad[l.name]||0)+1});
  okL.forEach(l=>{const d=new Date(l.at),x=byDay[dkey(l.at)]=byDay[dkey(l.at)]||{n:0,xp:0};x.n++;x.xp+=l.xp;
-  a.tier[l.tier-1]++;a.wd[d.getDay()]++;a.hr[d.getHours()]++;if(l.pct>=100)a.perfect++;a.top[l.name]=(a.top[l.name]||0)+1});
+  a.tier[Math.min(l.tier,11)-1]++;a.wd[d.getDay()]++;a.hr[d.getHours()]++;if(l.pct>=100)a.perfect++;a.top[l.name]=(a.top[l.name]||0)+1});
  a.avg=okL.length?Math.round(okL.reduce((s,l)=>s+l.pct,0)/okL.length):0;
  const t=new Date();t.setHours(0,0,0,0);a.today=(byDay[dkey(t)]||{n:0}).n;
  const d=new Date(t);if(!byDay[dkey(d)])d.setDate(d.getDate()-1);a.cur=0;                      // streak: hari libur tidak memutus
@@ -208,12 +213,12 @@ function insH(a){if(a.total<3)return'<p class="hint">Selesaikan minimal 3 quest 
 <li>Quest paling sering selesai: <b>${esc(tq[0])}</b>, ${tq[1]} kali.</li>${bq?`<li>Quest paling sering gagal: <b>${esc(bq[0])}</b>, ${bq[1]} kali.</li>`:''}</ul>`}
 function statH(a){const ord=[1,2,3,4,5,6,0];
  return `<h4 class="sec">Aktivitas 18 minggu</h4>${heatH(a)}<h4 class="sec">Selesai per hari dalam seminggu</h4>${bars(ord.map(d=>a.wd[d]),ord.map(d=>DN[d]))}
-<h4 class="sec">Selesai per tier</h4>${bars(a.tier,R,{col:i=>hue(i+1)})}<h4 class="sec">Pola produktivitas</h4>${insH(a)}`}
+<h4 class="sec">Selesai per tier</h4>${bars(a.tier[10]?a.tier:a.tier.slice(0,10),a.tier[10]?[...R,'XI+']:R,{col:i=>hue(i+1)})}<h4 class="sec">Pola produktivitas</h4>${insH(a)}`}
 function logH(){const f=ui.lf,L=S.log.filter(l=>f==='all'||(f==='fail')===(l.res==='fail')).sort((x,y)=>y.at-x.at).slice(0,300);
  let h='',g=null;const flush=()=>{if(g)h+=`<div class="day">${fmtL(new Date(g.t))}<span>${g.n} selesai${g.f?', '+g.f+' gagal':''}, +${g.xp} XP</span></div>${g.h}`};
  L.forEach(l=>{const k=dkey(l.at);if(!g||g.k!==k){flush();g={k,t:l.at,n:0,f:0,xp:0,h:''}}
   if(l.res==='fail')g.f++;else{g.n++;g.xp+=l.xp}
-  g.h+=`<div class="le" style="--t:${hue(l.tier)}"><span class="tier">${R[l.tier-1]}</span><div>${esc(l.name)}<br><small>${TYPES[l.type]}, ${fmtT(l.at)}${l.res==='fail'?', gagal':l.pct<100?', selesai '+l.pct+'%':''}</small></div>${l.res==='fail'?'<em class="bad">Gagal</em>':`<em>+${l.xp}</em>`}</div>`});flush();
+  g.h+=`<div class="le" style="--t:${hue(l.tier)}">${tb(l.tier)}<div>${esc(l.name)}<br><small>${TYPES[l.type]}, ${fmtT(l.at)}${l.res==='fail'?', gagal':l.pct<100?', selesai '+l.pct+'%':''}</small></div>${l.res==='fail'?'<em class="bad">Gagal</em>':`<em>+${l.xp}</em>`}</div>`});flush();
  return `<div class="seg">${[['all','Semua'],['done','Selesai'],['fail','Gagal']].map(([k,l])=>`<button data-lf="${k}" class="${f===k?'on':''}">${l}</button>`).join('')}</div>`+(h||'<div class="empty">Belum ada catatan.<br>Selesaikan quest pertamamu.</div>')}
 function renderProf(force){const sig=[S.log.length,(S.log.at(-1)||{}).id,S.profile.name,S.profile.goal,S.profile.rest.join(),dkey(Date.now()),ui.pt,ui.rng,ui.lf,S.quests.filter(q=>status(q)==='on').length].join('|');
  if(!force&&sig===ui.sig)return;ui.sig=sig;const a=analyze();ui.a=a;$('#prof').innerHTML=profH(a);
@@ -338,7 +343,7 @@ let tt;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on
 /* ---------- aksi quest ---------- */
 function finish(id,fail){const q=get(id);if(!q||status(q)!=='on')return;const p=fail?0:eff(q);
  if(!fail&&p<=0){toast('Persentase 0%: naikkan persentasenya atau tandai Gagal');return}
- const e={id:uid(),qid:q.id,name:q.name,tier:q.tier,type:q.type,xp:fail?0:pts(q),at:Date.now(),res:fail?'fail':'done',pct:p};
+ const e={id:uid(),qid:q.id,name:q.name,tier:q.tier,bx:q.xp,type:q.type,xp:fail?0:pts(q),at:Date.now(),res:fail?'fail':'done',pct:p};
  const r0=rankName();S.log.push(e);q.doneAt=e.at;q.doneLog=e.id;q.res=fail?'fail':null;if(!fail)q.pct=p;save();render();
  toast((fail?`Gagal: ${q.name}`:`Selesai${p<100?' '+p+'%':''}: ${q.name} (+${e.xp} XP)`)+(!fail&&rankName()!==r0?` Naik rank: ${rankName()}!`:''))}
 function undo(id){const q=get(id);if(!q)return;S.log=S.log.filter(l=>l.id!==q.doneLog);q.doneAt=q.doneLog=q.res=null;save();render()}
@@ -350,13 +355,13 @@ function progH(q,s){const on=s==='on',cl=`<h4>Checklist</h4><div id="cls">${q.cl
 <input type="range" id="pr" min="0" max="100" step="1" ${on?'':'disabled'} aria-label="Persentase selesai">
 ${on?'<div class="presets"><button data-pct="25">25%</button><button data-pct="50">50%</button><button data-pct="75">75%</button><button data-pct="100">100%</button></div>':''}</div>${on||q.cl.length?cl:''}`}
 function syncProg(){const q=get(ui.d),pv=$('#pv');if(!q||!pv)return;const p=eff(q);
- pv.textContent=p+'%';$('#px').textContent=status(q)==='fail'?'Gagal, tanpa poin':'Poin: +'+pts(q)+' dari '+q.tier*10;$('#pr').value=p;
+ pv.textContent=p+'%';$('#px').textContent=status(q)==='fail'?'Gagal, tanpa poin':'Poin: +'+pts(q)+' dari '+q.xp;$('#pr').value=p;
  const ob=$('#okb');if(ob)ob.disabled=p<=0}
 function openDetail(id){const q=get(id);if(!q)return;ui.d=id;const s=status(q),e=endAt(q);
  const btn={on:'<button class="fb" data-act="fail">Gagal</button><button class="pri" id="okb" data-act="done">Selesai</button>',
   done:'<button class="pri" data-act="undo">Batalkan selesai</button>',fail:'<button class="pri" data-act="undo">Batalkan gagal</button>',
   wait:'<button class="pri" disabled>Belum dimulai</button>',end:'<button class="pri" disabled>Sudah berakhir</button>'}[s];
- $('#dd').innerHTML=`<div class="dh" style="--t:${hue(q.tier)}"><span class="tier" style="cursor:default">${R[q.tier-1]}</span><h2>${esc(q.name)}</h2><button class="ic" data-close aria-label="Tutup">✕</button></div>
+ $('#dd').innerHTML=`<div class="dh" style="--t:${hue(q.tier)}">${tb(q.tier,'','cursor:default;')}<h2>${esc(q.name)}</h2><button class="ic" data-close aria-label="Tutup">✕</button></div>
 <p class="desc">${q.desc?esc(q.desc):'<i>Tanpa deskripsi</i>'}</p>
 <div class="chips">${chips(q)}</div>
 <p class="meta">Quest Dimulai: ${fmtDT(q.cs)}<br>Quest Berakhir: ${e===Infinity?'tanpa batas waktu':fmtDT(e)}</p>
@@ -376,9 +381,11 @@ $('#dd').addEventListener('close',()=>{const q=get(ui.d);if(q)q.cl=q.cl.filter(i
 
 /* ---------- form tambah / edit ---------- */
 const F=$('#qf');
-F.tr.innerHTML=R.map((r,i)=>`<option value="${i+1}">${r}${i===0?' (prioritas rendah)':i===9?' (prioritas tinggi)':''}</option>`).join('');
+const xpHint=()=>{const x=num(F.xp.value,1,XMAX,1),t=tierOf(x);$('#xph').textContent='Tier '+roman(t)+': '+tierMin(t)+' sampai '+tierMax(t)+' XP. Tier berikutnya mulai dari '+tierMin(t+1)+' XP.'};
 F.ty.innerHTML=TK.map(k=>`<option value="${k}">${TYPES[k]}</option>`).join('');
-$('#tf').innerHTML='<option value="">Semua tier</option>'+R.map((r,i)=>`<option value="${i+1}">Tier ${r}</option>`).join('');
+function fillTf(){const el=$('#tf'),cur=el.value,ts=[...new Set(S.quests.map(q=>q.tier).concat(cur?[+cur]:[]))].sort((a,b)=>a-b),sig=ts.join();   // pilihan filter mengikuti tier yang dipakai quest
+ if(sig===ui.tfs)return;ui.tfs=sig;el.innerHTML='<option value="">Semua tier</option>'+ts.map(t=>`<option value="${t}">Tier ${roman(t)}</option>`).join('');el.value=cur}
+fillTf();
 F.addEventListener('click',e=>{const b=e.target.closest('[data-days]');if(!b)return;
  document.querySelectorAll('#dchips input').forEach(c=>c.checked=b.dataset.days.includes(c.value));sync()});
 function sync(){const on=!!document.querySelector('#dchips input:checked'),k=F.dk.value;
@@ -386,12 +393,13 @@ function sync(){const on=!!document.querySelector('#dchips input:checked'),k=F.d
  $('#dkh').textContent=k==='after'?'Dihitung sejak quest dimulai dan berlaku di setiap pengulangan. Tanpa hari di Quest Dimulai, quest dimulai sesuai type (Daily tiap hari 00.00, Weekly tiap Senin 00.00, Monthly tiap tanggal 1).'
   :k==='custom'?'Quest berakhir pada tanggal ini. Quest yang berulang tidak dimulai lagi setelahnya.':'Quest tetap ada sampai kamu menyelesaikannya.'}
 function openForm(q){ui.edit=q?q.id:null;$('#qt').textContent=q?'Edit quest':'Quest baru';
- F.nm.value=q?q.name:'';F.ds.value=q?q.desc:'';F.ck.value=q?q.cl.map(i=>i.t).join('\n'):'';F.tr.value=q?q.tier:5;F.ty.value=q?q.type:(ui.type==='all'?'daily':ui.type);F.ev.value=q?q.every:0;
+ F.nm.value=q?q.name:'';F.ds.value=q?q.desc:'';F.ck.value=q?q.cl.map(i=>i.t).join('\n'):'';F.xp.value=q?q.xp:50;F.ty.value=q?q.type:(ui.type==='all'?'daily':ui.type);F.ev.value=q?q.every:0;
  F.dk.value=q?q.dl.k:'none';F.dn.value=q?q.dl.n:1;F.du.value=q?q.dl.u:'d';F.dt.value=q&&q.dl.k==='custom'?loc(q.dl.at):'';
  F.tm.value=q&&q.sch?q.sch.time:'08:00';F.st.value=q&&q.start?loc(q.start):'';
  document.querySelectorAll('#dchips input').forEach(c=>c.checked=!!(q&&q.sch&&q.sch.days.includes(+c.value)));
- sync();$('#qd').showModal();F.nm.focus()}
+ sync();xpHint();$('#qd').showModal();F.nm.focus()}
 F.addEventListener('change',sync);
+F.addEventListener('input',e=>{if(e.target===F.xp)xpHint()});
 F.addEventListener('submit',e=>{e.preventDefault();const name=F.nm.value.trim();if(!name)return;
  const old=ui.edit&&get(ui.edit),n=Date.now(),k=F.dk.value,
   days=[...document.querySelectorAll('#dchips input:checked')].map(c=>+c.value),
@@ -399,7 +407,7 @@ F.addEventListener('submit',e=>{e.preventDefault();const name=F.nm.value.trim();
   start=F.st.value?new Date(F.st.value).getTime():null,
   dl={k,at:k==='custom'?new Date(F.dt.value).getTime():null,n:num(F.dn.value,1,9999,1),u:F.du.value};
  const pool=old?[...old.cl]:[],cl=F.ck.value.split('\n').map(x=>x.trim()).filter(Boolean).slice(0,100).map(t=>{const k=pool.findIndex(i=>i.t===t);return k>=0?pool.splice(k,1)[0]:{id:uid(),t:t.slice(0,200),d:false}});
- const data={name,cl,desc:F.ds.value.trim(),tier:+F.tr.value,type:F.ty.value,every:F.ty.value==='custom'?num(F.ev.value,0,3650,0):0,dl,sch,start};
+ const xp=num(F.xp.value,1,XMAX,10),data={name,cl,desc:F.ds.value.trim(),xp,tier:tierOf(xp),type:F.ty.value,every:F.ty.value==='custom'?num(F.ev.value,0,3650,0):0,dl,sch,start};
  if(old){const od=old.dl,chg=od.k!==dl.k||od.n!==dl.n||od.u!==dl.u||od.at!==dl.at;Object.assign(old,data);
   if(old.cs>n||(start&&start>n))old.cs=firstStart(old,n);                  // belum dimulai / awal ditunda: hitung ulang awal quest
   else if(chg&&k==='after'&&endAt(old)<=n)old.cs=n}                         // hitung mundur baru yang sudah lewat: mulai dihitung dari sekarang
