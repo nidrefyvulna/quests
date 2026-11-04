@@ -1,5 +1,5 @@
 'use strict';
-const $=s=>document.querySelector(s),KEY='quests.v1',DAY=864e5,VER=8;
+const $=s=>document.querySelector(s),KEY='quests.v1',DAY=864e5,VER=10;
 const R=['I','II','III','IV','V','VI','VII','VIII','IX','X'];
 const TYPES={daily:'Daily',weekly:'Weekly',monthly:'Monthly',custom:'Custom'},TK=Object.keys(TYPES);
 const SPAN={m:6e4,h:36e5,d:DAY,w:7*DAY};
@@ -95,16 +95,19 @@ const fmtT=t=>new Date(t).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-d
 const fmtDT=t=>new Date(t).toLocaleString('id-ID',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
 const fmtW=t=>new Date(t).toLocaleString('id-ID',{weekday:'short',hour:'2-digit',minute:'2-digit'});
 const fmtS=t=>t-Date.now()<6*DAY?fmtW(t):fmtDT(t);
+const fmtR=t=>{const d=t-Date.now();return d>0&&d<DAY?'dalam '+left(d):fmtS(t)};      // kurang dari 24 jam: hitung mundur
 const loc=t=>new Date(t-new Date(t).getTimezoneOffset()*6e4).toISOString().slice(0,16);
 function resetAt(q){const r=nextStart(q,q.doneAt,false,q.doneAt);return q.dl.k==='custom'&&r>=q.dl.at?Infinity:r}
 // done = selesai, wait = belum dimulai, end = berakhir (lewat Quest Berakhir), on = sedang berlangsung
 function status(q){const n=Date.now();if(q.doneAt&&n<resetAt(q))return q.res==='fail'?'fail':'done';if(q.cs>n)return'wait';return n>=endAt(q)?'end':'on'}
-function refresh(){let ch=false;const n=Date.now();
+const nextRun=q=>{const s=status(q);return s==='done'||s==='fail'?resetAt(q):s==='end'&&q.dl.k!=='custom'?nextStart(q,endAt(q),true,q.cs):Infinity};   // kapan quest yang tidak aktif (selesai/gagal/berakhir) dimulai lagi
+const back=q=>nextRun(q)!==Infinity;                                                                                                       // akan berulang: ikut tampil di Belum dimulai
+function refresh(){let ch=false;const n=Date.now(),re=[];
  S.quests.forEach(q=>{for(let i=0;i<400;i++){
-  if(q.doneAt){const r=resetAt(q);if(n<r)break;q.doneAt=q.doneLog=null;q.cs=r;newRun(q);ch=true;continue}      // siklus baru setelah selesai
+  if(q.doneAt){const r=resetAt(q);if(n<r)break;q.doneAt=q.doneLog=null;q.cs=r;newRun(q);ch=true;re.includes(q)||re.push(q);continue}      // siklus baru setelah selesai
   const e=endAt(q);if(n<e||q.cs>n||q.dl.k==='custom')break;
-  const ns=nextStart(q,e,true,q.cs);if(ns>n)break;q.cs=ns;newRun(q);ch=true}});                               // siklus baru setelah berakhir
- if(ch)save()}
+  const ns=nextStart(q,e,true,q.cs);if(ns>n)break;q.cs=ns;newRun(q);ch=true;re.includes(q)||re.push(q)}});                               // siklus baru setelah berakhir
+ if(ch)save();return re}
 const typeLabel=q=>TYPES[q.type]+(q.type==='custom'&&!q.sch&&q.every>0?' (tiap '+q.every+' hari)':'');
 const DN={0:'Min',1:'Sen',2:'Sel',3:'Rab',4:'Kam',5:'Jum',6:'Sab'};
 const schLabel=q=>(q.sch.days.length===7?'setiap hari':[1,2,3,4,5,6,0].filter(d=>q.sch.days.includes(d)).map(d=>DN[d]).join(', '))+' pukul '+q.sch.time.replace(':','.');
@@ -119,21 +122,23 @@ const eff=q=>q.pct!=null?q.pct:(clPct(q)??100);                           // sli
 const pts=q=>Math.round(q.tier*10*eff(q)/100);
 
 /* ---------- sort / filter ---------- */
-const cmpDl=dir=>(a,b)=>{const x=endAt(a),y=endAt(b);if(x===y)return 0;if(x===Infinity)return 1;if(y===Infinity)return -1;return dir*(x-y)};
-const SORTS={stA:(a,b)=>a.cs-b.cs,stD:(a,b)=>b.cs-a.cs,dlA:cmpDl(1),dlD:cmpDl(-1),tierD:(a,b)=>b.tier-a.tier,tierA:(a,b)=>a.tier-b.tier},ORD={on:0,wait:1,done:2,fail:3,end:4};
+const cmpDl=dir=>(a,b,s,e)=>{const x=e(a),y=e(b);if(x===y)return 0;if(x===Infinity)return 1;if(y===Infinity)return -1;return dir*(x-y)};
+const SORTS={stA:(a,b,s)=>s(a)-s(b),stD:(a,b,s)=>s(b)-s(a),dlA:cmpDl(1),dlD:cmpDl(-1),tierD:(a,b)=>b.tier-a.tier,tierA:(a,b)=>a.tier-b.tier},ORD={on:0,wait:1,done:2,fail:3,end:4};
 function visible(){const q=$('#q').value.trim().toLowerCase(),tf=$('#tf').value,cmp=SORTS[$('#sort').value]||SORTS.stA,
  want=new Set([...document.querySelectorAll('#fst input:checked')].map(c=>c.value));
- return S.quests.filter(x=>(ui.type==='all'||x.type===ui.type)&&want.has(status(x))&&(!tf||x.tier==tf)&&
+ const nx=x=>!want.has(status(x))&&back(x),                                    // tampil lewat Belum dimulai: pakai jadwal siklus berikutnya
+  st=x=>nx(x)?nextRun(x):x.cs,en=x=>nx(x)?(x.dl.k==='after'?nextRun(x)+dlSpan(x.dl):x.dl.k==='custom'?x.dl.at:Infinity):endAt(x),gr=x=>nx(x)?'wait':status(x);
+ return S.quests.filter(x=>(ui.type==='all'||x.type===ui.type)&&(want.has(status(x))||want.has('wait')&&back(x))&&(!tf||x.tier==tf)&&
   (!q||(x.name+' '+x.desc+' '+x.notes.map(n=>n.text).join(' ')).toLowerCase().includes(q)))
-  .sort((a,b)=>ORD[status(a)]-ORD[status(b)]||cmp(a,b)||b.tier-a.tier||a.created-b.created)}
+  .sort((a,b)=>ORD[gr(a)]-ORD[gr(b)]||cmp(a,b,st,en)||b.tier-a.tier||a.created-b.created)}
 
 /* ---------- render ---------- */
 function chips(q){const n=Date.now(),s=status(q),e=endAt(q);let h=`<span class="chip">${typeLabel(q)}</span>`;
  if(q.sch)h+=`<span class="chip">Dimulai ${schLabel(q)}</span>`;
  if(s==='on')h+=e===Infinity?'<span class="chip">Tanpa batas waktu</span>':`<span class="chip ${e-n<36e5?'bad':e-n<DAY?'warn':''}">Berakhir dalam ${left(e-n)}</span>`;
- if(s==='wait')h+=`<span class="chip">Dimulai ${fmtS(q.cs)}</span>`;
- if(s==='done'||s==='fail'){h+=s==='fail'?`<span class="chip bad">Gagal ${fmtD(q.doneAt)}</span>`:`<span class="chip ok">Selesai${q.pct!=null&&q.pct<100?' '+q.pct+'%':''} ${fmtD(q.doneAt)}</span>`;const r=resetAt(q);if(r!==Infinity)h+=`<span class="chip">Dimulai lagi ${fmtS(r)}</span>`}
- if(s==='end'){h+=`<span class="chip bad">Berakhir ${fmtDT(e)}</span>`;const ns=q.dl.k==='custom'?Infinity:nextStart(q,e,true,q.cs);if(ns!==Infinity)h+=`<span class="chip">Dimulai lagi ${fmtS(ns)}</span>`}
+ if(s==='wait')h+=`<span class="chip">Dimulai ${fmtR(q.cs)}</span>`;
+ if(s==='done'||s==='fail'){h+=s==='fail'?`<span class="chip bad">Gagal ${fmtD(q.doneAt)}</span>`:`<span class="chip ok">Selesai${q.pct!=null&&q.pct<100?' '+q.pct+'%':''} ${fmtD(q.doneAt)}</span>`;const r=resetAt(q);if(r!==Infinity)h+=`<span class="chip">Dimulai lagi ${fmtR(r)}</span>`}
+ if(s==='end'){h+=`<span class="chip bad">Berakhir ${fmtDT(e)}</span>`;const ns=q.dl.k==='custom'?Infinity:nextStart(q,e,true,q.cs);if(ns!==Infinity)h+=`<span class="chip">Dimulai lagi ${fmtR(ns)}</span>`}
  return h}
 function card(q){const s=status(q),it=clItems(q),dn=it.filter(i=>i.d).length,p=s==='on'&&(q.cl.length||q.pct!=null),closed=s==='done'||s==='fail';
  return `<article class="row${s==='on'?'':' '+s}" data-id="${q.id}" style="--t:${hue(q.tier)}"><span class="tier" data-act="open">${R[q.tier-1]}</span>
@@ -319,9 +324,10 @@ if(NF){
   Object.assign(n,{tags:parseTags(NF.ng.value),rep:k?{k,days:k==='w'?days:[],dom:k==='m'?dom:[],t1,t2}:null,from,until,pin:NF.np.checked,arch:NF.na.checked,edited:Date.now()});
   save();$('#nd').close();drawNote();render()})}
 
-function render(){refresh();const w=new Set(S.quests.filter(q=>status(q)==='wait').map(q=>q.id)),nw=new Set(S.notes.filter(n=>nst(n)==='wait').map(n=>n.id)),msg=[],
+function render(){const rs=refresh().filter(q=>status(q)==='on'),w=new Set(S.quests.filter(q=>status(q)==='wait').map(q=>q.id)),nw=new Set(S.notes.filter(n=>nst(n)==='wait').map(n=>n.id)),msg=[],
  up=S.quests.filter(q=>ui.w&&ui.w.has(q.id)&&!w.has(q.id)&&status(q)==='on'),un=S.notes.filter(n=>ui.nw&&ui.nw.has(n.id)&&!nw.has(n.id)&&nst(n)==='show');ui.w=w;ui.nw=nw;
- if(up.length)msg.push('Quest dimulai: '+up.map(q=>q.name).join(', '));if(un.length)msg.push('Note tampil: '+un.map(noteName).join(', '));if(msg.length)toast(msg.join('. '));
+ const lst=a=>a.slice(0,3).join(', ')+(a.length>3?' +'+(a.length-3)+' lainnya':'');
+ if(rs.length)msg.push('Quest dimulai lagi: '+lst(rs.map(q=>q.name)));if(up.length)msg.push('Quest dimulai: '+lst(up.map(q=>q.name)));if(un.length)msg.push('Note tampil: '+lst(un.map(noteName)));if(msg.length)toast(msg.join('. '));
  renderTypes();renderList();renderGoal();renderStrip();$('#lvl').textContent=rankName();if(ui.tab==='notes')renderNotes();if(ui.tab==='log')renderProf()}
 function show(t){['quests','notes','log','data'].forEach(k=>$('#v-'+k).hidden=k!==t);
  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.nav===t));
@@ -456,11 +462,17 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-act],[data
  if(d.day){const v=ui.a&&ui.a.byDay[d.day],h=$('#hd');if(h)h.textContent=fmtL(keyDate(d.day))+': '+(v?v.n+' quest selesai, +'+v.xp+' XP':'tidak ada aktivitas');return}
  if(d.pct){const q=get(ui.d);if(q&&status(q)==='on'){q.pct=+d.pct;syncProg();save()}return}
  if(d.nav)return show(d.nav);
- if(d.type){ui.type=d.type;return render()}
+ if(d.type){ui.type=d.type;savePrefs();return render()}
  if('close' in d)return b.closest('dialog').close();
  A[d.act]?.(b.closest('.row')?.dataset.id||ui.d,b)});
-$('#q').oninput=renderList;['#sort','#tf','#fst'].forEach(s=>$(s).onchange=renderList);
-$('#nq').oninput=renderNotes;['#nsort','#nst'].forEach(s=>$(s).onchange=renderNotes);
+/* ---------- ingat pilihan filter & urutan (per perangkat) ---------- */
+const PK='quests.ui',pChk=s=>[...document.querySelectorAll(s+' input:checked')].map(c=>c.value);
+const savePrefs=()=>{try{localStorage.setItem(PK,JSON.stringify({type:ui.type,sort:$('#sort').value,tf:$('#tf').value,nsort:$('#nsort').value,fst:pChk('#fst'),nst:pChk('#nst')}))}catch(e){}};
+try{const p=JSON.parse(localStorage.getItem(PK))||{},sel=(s,v)=>{const el=$(s);if([...el.options].some(o=>o.value===v))el.value=v},
+  tick=(s,a)=>{if(Array.isArray(a)&&a.length)document.querySelectorAll(s+' input').forEach(c=>c.checked=a.includes(c.value))};
+ if(p.type==='all'||TK.includes(p.type))ui.type=p.type;sel('#sort',p.sort);sel('#tf',p.tf);sel('#nsort',p.nsort);tick('#fst',p.fst);tick('#nst',p.nst)}catch(e){}
+$('#q').oninput=renderList;['#sort','#tf','#fst'].forEach(s=>$(s).onchange=()=>{renderList();savePrefs()});
+$('#nq').oninput=renderNotes;['#nsort','#nst'].forEach(s=>$(s).onchange=()=>{renderNotes();savePrefs()});
 const applyTheme=t=>{document.documentElement.dataset.theme=t;$('meta[name=theme-color]').content=t==='dark'?'#0e131b':'#f2f4f8'};
 $('#theme').onclick=()=>{const t=document.documentElement.dataset.theme==='dark'?'light':'dark';applyTheme(t);localStorage.setItem('quests.theme',t)};
 applyTheme(document.documentElement.dataset.theme);
