@@ -190,3 +190,17 @@ dialog[open]{animation:sheet .22s ease-out}dialog[open]::backdrop{animation:fade
 @keyframes sheet{from{transform:translateY(24px);opacity:0}}@keyframes fadein{from{opacity:0}}
 @media(prefers-reduced-motion:reduce){dialog[open],dialog[open]::backdrop{animation:none}}
 .rfoot span:first-child{white-space:nowrap}.rfoot span:last-child{text-align:right}
+
+/* rantai quest */
+.row.lock{opacity:.55}.row.lock .chk{visibility:hidden}
+.chain p{margin:6px 0;font-size:.92rem;color:var(--mut);overflow-wrap:anywhere}
+.lnk{min-height:32px;padding:3px 12px;font-size:.88rem;font-weight:600;color:var(--ink);border-radius:99px;margin:1px 0;text-align:left}
+#rqs select{margin-top:6px}
+#dd menu button:not(.pri):not(.fb){min-height:40px;padding:6px 12px;font-size:.92rem}
+#toast{border-radius:20px;text-align:center}
+/* timer */
+.ic.run,.tmb.run{font-variant-numeric:tabular-nums}
+.ic.run{width:auto;padding:0 12px;border-radius:22px;font-size:.85rem}
+.tclock{margin:14px 0 2px;text-align:center;font:700 4.4rem/1.1 var(--ser);font-variant-numeric:tabular-nums}
+.tph{margin:0 0 10px;min-height:1.4em;text-align:center;color:var(--mut)}
+#td .btns{margin-bottom:4px}

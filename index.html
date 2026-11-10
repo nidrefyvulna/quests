@@ -19,6 +19,7 @@
 <header class="top">
   <h1>Quests</h1>
   <span class="lvl" id="lvl" data-nav="log" role="button" title="Buka profil"></span>
+  <button class="ic tmb" id="tmb" data-act="timer" data-idle="⏱" aria-label="Timer">⏱</button>
   <button class="ic" id="theme" aria-label="Ganti tema terang/gelap">◐</button>
 </header>
 <main>
@@ -41,6 +42,7 @@
       <div class="days" id="fst" role="group" aria-label="Tampilkan quest yang">
         <label><input type="checkbox" value="on" checked autocomplete="off"><span>Sedang berlangsung</span></label>
         <label title="Termasuk quest yang sudah selesai, gagal, atau berakhir tapi akan dimulai lagi (daily, weekly, dst)"><input type="checkbox" value="wait" autocomplete="off"><span>Belum dimulai</span></label>
+        <label title="Quest berantai yang menunggu quest pemicunya selesai atau gagal"><input type="checkbox" value="lock" autocomplete="off"><span>Terkunci</span></label>
         <label><input type="checkbox" value="done" autocomplete="off"><span>Sudah selesai</span></label>
         <label><input type="checkbox" value="fail" autocomplete="off"><span>Sudah gagal</span></label>
         <label><input type="checkbox" value="end" autocomplete="off"><span>Sudah berakhir</span></label>
@@ -148,6 +150,12 @@
     <label id="dtl" hidden>Berakhir pada<input name="dt" type="datetime-local"></label>
     <p class="hint" id="dkh"></p>
   </div>
+  <div id="rqs" role="group" aria-label="Muncul setelah quest lain">
+    <span class="lbl">Muncul setelah quest lain</span>
+    <select name="rq" aria-label="Quest pemicu"></select>
+    <div id="rol" hidden><span class="lbl">Quest ini muncul saat quest itu</span><select name="ro" aria-label="Quest ini muncul saat quest itu"><option value="done">Selesai</option><option value="fail">Gagal atau waktu habis</option><option value="any">Selesai atau gagal</option></select></div>
+    <p class="hint" id="rqh"></p>
+  </div>
   <menu><button type="button" data-close>Batal</button><button class="pri">Simpan</button></menu>
 </form></dialog>
 <dialog id="dd"></dialog>
@@ -216,6 +224,20 @@
   <div class="days"><label><input type="checkbox" name="np"><span>Sematkan</span></label><label><input type="checkbox" name="na"><span>Arsipkan</span></label></div>
   <menu><button type="button" class="danger" id="ndel" data-act="ndel">Hapus note</button><span class="sp"></span><button type="button" data-close>Batal</button><button class="pri">Simpan</button></menu>
 </form></dialog>
+<dialog id="td">
+  <div class="dh"><h2>Timer</h2><button class="ic" data-close aria-label="Tutup">✕</button></div>
+  <div class="tclock" id="tclock" role="timer">00:00</div>
+  <p class="tph" id="tph" aria-live="polite">Pilih durasi atau atur interval.</p>
+  <div class="btns"><button id="tpp" data-act="tpause" hidden>Jeda</button><button data-act="treset">Reset</button></div>
+  <span class="lbl">Hitung mundur (langsung jalan)</span>
+  <div class="presets"><button data-act="tset" data-s="30">30 dtk</button><button data-act="tset" data-s="45">45 dtk</button><button data-act="tset" data-s="60">60 dtk</button><button data-act="tset" data-s="90">90 dtk</button><button data-act="tset" data-s="120">2 mnt</button><button data-act="tset" data-s="180">3 mnt</button></div>
+  <span class="lbl">Interval (kerja dan istirahat bergantian)</span>
+  <div class="two"><label>Kerja (dtk)<input id="tiw" type="number" min="1" max="3600" value="20" inputmode="numeric"></label><label>Istirahat (dtk)<input id="tir" type="number" min="0" max="3600" value="10" inputmode="numeric"></label></div>
+  <label>Jumlah ronde<input id="tin" type="number" min="1" max="99" value="8" inputmode="numeric"></label>
+  <div class="presets"><button data-act="tiv" data-iv="20-10-8">20:10 x8</button><button data-act="tiv" data-iv="30-30-6">30:30 x6</button><button data-act="tiv" data-iv="40-20-5">40:20 x5</button><button data-act="tiv" data-iv="60-30-4">60:30 x4</button></div>
+  <menu><button type="button" data-close>Tutup</button><button class="pri" data-act="tgo">Mulai interval</button></menu>
+  <p class="hint">Bunyi dan getar menandai pergantian. Layar dijaga menyala selama timer jalan. Timer tetap berjalan saat jendela ini ditutup.</p>
+</dialog>
 <div id="toast" role="status"></div>
 <script src="app.js"></script>
 </body>

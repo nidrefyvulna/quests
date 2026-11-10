@@ -1,5 +1,5 @@
 'use strict';
-const $=s=>document.querySelector(s),KEY='quests.v1',DAY=864e5,VER=11;
+const $=s=>document.querySelector(s),KEY='quests.v1',DAY=864e5,VER=12;
 const R=['I','II','III','IV','V','VI','VII','VIII','IX','X'];
 /* XP quest menentukan tier otomatis, tanpa batas: Tier T = 2(T-1)^2+1 sampai 2T^2 XP (I: 1-2, II: 3-8, III: 9-18, ...) */
 const XMAX=1e7,tierMin=t=>2*(t-1)*(t-1)+1,tierMax=t=>2*t*t;
@@ -44,6 +44,7 @@ function firstStart(q,t0){const b=Math.max(t0,q.start||0);                   // 
 const endAt=q=>q.dl.k==='after'?q.cs+dlSpan(q.dl):q.dl.k==='custom'?q.dl.at:Infinity;
 
 /* ---------- sanitasi data (dipakai saat load & import; juga migrasi dari versi lama) ---------- */
+const cleanReq=r=>r&&typeof r==='object'&&sid(r.id)&&['done','fail','any'].includes(r.on)?{id:sid(r.id),on:r.on}:null;   // rantai: quest ini baru muncul setelah quest lain selesai / gagal
 function cleanQ(q,keep){q=q||{};const w=q.dl||{},mig=w.k==='day'||w.k==='week',sc=cleanS(q.sch),xp=fin(q.xp)?num(q.xp,1,XMAX,10):num(q.tier,1,10,1)*10;
  let k=mig?'after':['after','custom'].includes(w.k)?w.k:'none';
  const at=k==='custom'&&fin(w.at)?+w.at:null;if(k==='custom'&&at===null)k='none';
@@ -53,6 +54,7 @@ function cleanQ(q,keep){q=q||{};const w=q.dl||{},mig=w.k==='day'||w.k==='week',s
   notes:(Array.isArray(q.notes)?q.notes:[]).slice(0,200).map(n=>({id:sid(n&&n.id)||uid(),text:str(n&&n.text,5000),ts:num(n&&n.ts,0,9e15,Date.now())})),
   created:num(q.created,0,9e15,Date.now()),doneAt:keep&&q.doneAt?num(q.doneAt,0,9e15,null):null,doneLog:keep&&q.doneLog?sid(q.doneLog):null,res:keep&&q.doneAt&&q.res==='fail'?'fail':null,pct:keep&&fin(q.pct)?num(q.pct,0,100,null):null,
   cl:(Array.isArray(q.cl)?q.cl:[]).slice(0,100).map(i=>({id:sid(i&&i.id)||uid(),t:str(i&&i.t,200),d:!!(keep&&i&&i.d)})).filter(i=>i.t.trim())};
+ o.req=cleanReq(q.req);o.lk=keep&&typeof q.lk==='boolean'?q.lk:null;o.ulBy=keep&&q.ulBy?sid(q.ulBy):null;o.xd=keep&&fin(q.xd)?+q.xd:null;   // lk: terkunci (null = dihitung ulang di fixReq)
  o.cs=fin(q.cs)?+q.cs:mig&&fin(w.at)?+w.at-dlSpan(dl):firstStart(o,sc?sc.at:o.created);
  return o}
 const lbx=l=>fin(l.bx)?num(l.bx,1,XMAX,10):num(l.tier,1,10,1)*10;   // XP dasar quest saat selesai (log lama: tier x 10)
@@ -103,16 +105,35 @@ const fmtS=t=>t-Date.now()<6*DAY?fmtW(t):fmtDT(t);
 const fmtR=t=>{const d=t-Date.now();return d>0&&d<DAY?'dalam '+left(d):fmtS(t)};      // kurang dari 24 jam: hitung mundur
 const loc=t=>new Date(t-new Date(t).getTimezoneOffset()*6e4).toISOString().slice(0,16);
 function resetAt(q){const r=nextStart(q,q.doneAt,false,q.doneAt);return q.dl.k==='custom'&&r>=q.dl.at?Infinity:r}
-// done = selesai, wait = belum dimulai, end = berakhir (lewat Quest Berakhir), on = sedang berlangsung
-function status(q){const n=Date.now();if(q.doneAt&&n<resetAt(q))return q.res==='fail'?'fail':'done';if(q.cs>n)return'wait';return n>=endAt(q)?'end':'on'}
+// done = selesai, wait = belum dimulai, lock = terkunci (menunggu quest pemicu), end = berakhir (lewat Quest Berakhir), on = sedang berlangsung
+function status(q){const n=Date.now();if(q.doneAt&&n<resetAt(q))return q.res==='fail'?'fail':'done';if(q.lk)return q.dl.k==='custom'&&n>=q.dl.at?'end':'lock';if(q.cs>n)return'wait';return n>=endAt(q)?'end':'on'}
 const nextRun=q=>{const s=status(q);return s==='done'||s==='fail'?resetAt(q):s==='end'&&q.dl.k!=='custom'?nextStart(q,endAt(q),true,q.cs):Infinity};   // kapan quest yang tidak aktif (selesai/gagal/berakhir) dimulai lagi
 const back=q=>nextRun(q)!==Infinity;                                                                                                       // akan berulang: ikut tampil di Belum dimulai
-function refresh(){let ch=false;const n=Date.now(),re=[];
+function refresh(){let ch=false;const n=Date.now(),re=[],nu=[],xs=[];
  S.quests.forEach(q=>{for(let i=0;i<400;i++){
   if(q.doneAt){const r=resetAt(q);if(n<r)break;q.doneAt=q.doneLog=null;q.cs=r;newRun(q);ch=true;re.includes(q)||re.push(q);continue}      // siklus baru setelah selesai
+  if(q.lk)break;                                                                                                                      // terkunci: menunggu quest pemicu
   const e=endAt(q);if(n<e||q.cs>n||q.dl.k==='custom')break;
-  const ns=nextStart(q,e,true,q.cs);if(ns>n)break;q.cs=ns;newRun(q);ch=true;re.includes(q)||re.push(q)}});                               // siklus baru setelah berakhir
- if(ch)save();return re}
+  const ns=nextStart(q,e,true,q.cs);if(ns>n)break;xs.push([q,q.cs]);q.cs=ns;newRun(q);ch=true;re.includes(q)||re.push(q)}});          // siklus baru setelah berakhir
+ S.quests.forEach(q=>{if(!q.lk&&!q.doneAt&&status(q)==='end')xs.push([q,q.cs])});
+ xs.forEach(([q,c])=>{if(q.xd===c)return;q.xd=c;ch=true;unlock(q,'fail','x'+c).forEach(b=>nu.includes(b)||nu.push(b))});                // waktu habis tanpa selesai = gagal bagi quest yang menunggunya (dicek setelah semua siklus diperbarui)
+ if(ch)save();re.nu=nu;return re}
+/* ---------- rantai quest: quest B terkunci sampai quest A selesai / gagal ---------- */
+const OUT={done:'selesai',fail:'gagal atau waktu habis',any:'selesai atau gagal'};
+const lst=a=>a.slice(0,3).join(', ')+(a.length>3?' +'+(a.length-3)+' lainnya':'');
+const reqMet=q=>{const a=q.req&&get(q.req.id);if(!a)return true;const s=status(a),o=q.req.on;return s==='done'&&o!=='fail'||(s==='fail'||s==='end')&&o!=='done'};
+const wake=b=>{b.lk=false;b.cs=firstStart(b,Date.now())};                                      // quest muncul: siklus pertamanya dimulai sekarang
+function unlock(a,res,by){const out=[];                                                      // a selesai ('done') / gagal ('fail'): munculkan quest yang menunggunya
+ S.quests.forEach(b=>{if(b===a||!b.lk||!b.req||b.req.id!==a.id||b.req.on!=='any'&&b.req.on!==res)return;wake(b);b.ulBy=by;out.push(b)});
+ return out.filter(b=>{const s=status(b);return s==='on'||s==='wait'})}
+const kids=id=>{const o=new Set(),w=x=>S.quests.forEach(b=>{if(b.req&&b.req.id===x&&!o.has(b.id)){o.add(b.id);w(b.id)}});w(id);return o};   // semua quest yang bergantung (langsung / berantai) pada id
+const cyc=(id,r)=>{let x=get(r),k=0;while(x&&id&&k++<=S.quests.length){if(x.id===id)return true;x=x.req&&get(x.req.id)}return false};   // id menunggu r: apakah membentuk lingkaran?
+function dropReq(id){S.quests.forEach(b=>{if(b.req&&b.req.id===id){if(b.lk)wake(b);b.req=null;b.ulBy=null}})}   // quest pemicu dihapus: yang menunggunya dibebaskan
+function fixReq(){const sig=()=>JSON.stringify(S.quests.map(q=>[q.req,q.lk])),before=sig();   // rapikan syarat setelah load / import: buang yang rusak atau melingkar
+ S.quests.forEach(q=>{if(q.req&&(q.req.id===q.id||!get(q.req.id)))q.req=null});
+ S.quests.forEach(q=>{let x=q,k=0;while(x&&x.req&&k++<=S.quests.length){x=get(x.req.id);if(x===q){q.req=null;break}}});
+ S.quests.forEach(q=>{if(!q.req){q.lk=false;q.ulBy=null}else if(typeof q.lk!=='boolean')q.lk=!reqMet(q)});
+ return sig()!==before}
 const typeLabel=q=>TYPES[q.type]+(q.type==='custom'&&!q.sch&&q.every>0?' (tiap '+q.every+' hari)':'');
 const DN={0:'Min',1:'Sen',2:'Sel',3:'Rab',4:'Kam',5:'Jum',6:'Sab'};
 const schLabel=q=>(q.sch.days.length===7?'setiap hari':[1,2,3,4,5,6,0].filter(d=>q.sch.days.includes(d)).map(d=>DN[d]).join(', '))+' pukul '+q.sch.time.replace(':','.');
@@ -120,7 +141,7 @@ function left(ms){const m=Math.floor(ms/6e4);if(m<1)return'kurang dari 1 mnt';if
  if(h<24)return h+' jam'+(m%60?' '+m%60+' mnt':'');return Math.floor(h/24)+' hari'+(h%24?' '+h%24+' jam':'')}
 
 /* ---------- persentase selesai & checklist ---------- */
-const newRun=q=>{q.res=null;q.pct=null;q.cl.forEach(i=>i.d=false)};      // siklus baru: progres dikosongkan
+const newRun=q=>{q.res=null;q.pct=null;q.cl.forEach(i=>i.d=false);if(q.req){q.lk=true;q.ulBy=null}};      // siklus baru: progres dikosongkan; quest berantai terkunci lagi
 const clItems=q=>q.cl.filter(i=>i.t.trim());
 const clPct=q=>{const a=clItems(q);return a.length?Math.round(a.filter(i=>i.d).length/a.length*100):null};
 const eff=q=>q.pct!=null?q.pct:(clPct(q)??100);                           // slider (manual) menang; kalau kosong ikut checklist; tanpa keduanya 100%
@@ -128,7 +149,7 @@ const pts=q=>Math.round(q.xp*eff(q)/100);
 
 /* ---------- sort / filter ---------- */
 const cmpDl=dir=>(a,b,s,e)=>{const x=e(a),y=e(b);if(x===y)return 0;if(x===Infinity)return 1;if(y===Infinity)return -1;return dir*(x-y)};
-const SORTS={stA:(a,b,s)=>s(a)-s(b),stD:(a,b,s)=>s(b)-s(a),dlA:cmpDl(1),dlD:cmpDl(-1),tierD:(a,b)=>b.xp-a.xp,tierA:(a,b)=>a.xp-b.xp},ORD={on:0,wait:1,done:2,fail:3,end:4};
+const SORTS={stA:(a,b,s)=>s(a)-s(b),stD:(a,b,s)=>s(b)-s(a),dlA:cmpDl(1),dlD:cmpDl(-1),tierD:(a,b)=>b.xp-a.xp,tierA:(a,b)=>a.xp-b.xp},ORD={on:0,wait:1,lock:2,done:3,fail:4,end:5};
 function visible(){const q=$('#q').value.trim().toLowerCase(),tf=$('#tf').value,cmp=SORTS[$('#sort').value]||SORTS.stA,
  want=new Set([...document.querySelectorAll('#fst input:checked')].map(c=>c.value));
  const nx=x=>!want.has(status(x))&&back(x),                                    // tampil lewat Belum dimulai: pakai jadwal siklus berikutnya
@@ -140,6 +161,8 @@ function visible(){const q=$('#q').value.trim().toLowerCase(),tf=$('#tf').value,
 /* ---------- render ---------- */
 function chips(q){const n=Date.now(),s=status(q),e=endAt(q);let h=`<span class="chip">${typeLabel(q)}</span><span class="chip">${q.xp} XP</span>`;
  if(q.sch)h+=`<span class="chip">Dimulai ${schLabel(q)}</span>`;
+ if(s==='lock'){const r=q.req&&get(q.req.id);h+='<span class="chip tg">Terkunci</span>'+(r?`<span class="chip">Muncul setelah "${esc(r.name)}" ${OUT[q.req.on]}</span>`:'')}
+ else if(q.req&&get(q.req.id))h+=`<span class="chip">Setelah "${esc(get(q.req.id).name)}"</span>`;
  if(s==='on')h+=e===Infinity?'<span class="chip">Tanpa batas waktu</span>':`<span class="chip ${e-n<36e5?'bad':e-n<DAY?'warn':''}">Berakhir dalam ${left(e-n)}</span>`;
  if(s==='wait')h+=`<span class="chip">Dimulai ${fmtR(q.cs)}</span>`;
  if(s==='done'||s==='fail'){h+=s==='fail'?`<span class="chip bad">Gagal ${fmtD(q.doneAt)}</span>`:`<span class="chip ok">Selesai${q.pct!=null&&q.pct<100?' '+q.pct+'%':''} ${fmtD(q.doneAt)}</span>`;const r=resetAt(q);if(r!==Infinity)h+=`<span class="chip">Dimulai lagi ${fmtR(r)}</span>`}
@@ -329,10 +352,9 @@ if(NF){
   Object.assign(n,{tags:parseTags(NF.ng.value),rep:k?{k,days:k==='w'?days:[],dom:k==='m'?dom:[],t1,t2}:null,from,until,pin:NF.np.checked,arch:NF.na.checked,edited:Date.now()});
   save();$('#nd').close();drawNote();render()})}
 
-function render(){const rs=refresh().filter(q=>status(q)==='on'),w=new Set(S.quests.filter(q=>status(q)==='wait').map(q=>q.id)),nw=new Set(S.notes.filter(n=>nst(n)==='wait').map(n=>n.id)),msg=[],
+function render(){const rf=refresh(),rs=rf.filter(q=>status(q)==='on'),w=new Set(S.quests.filter(q=>status(q)==='wait').map(q=>q.id)),nw=new Set(S.notes.filter(n=>nst(n)==='wait').map(n=>n.id)),msg=[],
  up=S.quests.filter(q=>ui.w&&ui.w.has(q.id)&&!w.has(q.id)&&status(q)==='on'),un=S.notes.filter(n=>ui.nw&&ui.nw.has(n.id)&&!nw.has(n.id)&&nst(n)==='show');ui.w=w;ui.nw=nw;
- const lst=a=>a.slice(0,3).join(', ')+(a.length>3?' +'+(a.length-3)+' lainnya':'');
- if(rs.length)msg.push('Quest dimulai lagi: '+lst(rs.map(q=>q.name)));if(up.length)msg.push('Quest dimulai: '+lst(up.map(q=>q.name)));if(un.length)msg.push('Note tampil: '+lst(un.map(noteName)));if(msg.length)toast(msg.join('. '));
+ if(rf.nu.length)msg.push('Quest baru muncul: '+lst(rf.nu.map(q=>q.name)));if(rs.length)msg.push('Quest dimulai lagi: '+lst(rs.map(q=>q.name)));if(up.length)msg.push('Quest dimulai: '+lst(up.map(q=>q.name)));if(un.length)msg.push('Note tampil: '+lst(un.map(noteName)));if(msg.length)toast(msg.join('. '));
  renderTypes();renderList();renderGoal();renderStrip();$('#lvl').textContent=rankName();if(ui.tab==='notes')renderNotes();if(ui.tab==='log')renderProf()}
 function show(t){['quests','notes','log','data'].forEach(k=>$('#v-'+k).hidden=k!==t);
  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.nav===t));
@@ -344,31 +366,38 @@ let tt;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on
 function finish(id,fail){const q=get(id);if(!q||status(q)!=='on')return;const p=fail?0:eff(q);
  if(!fail&&p<=0){toast('Persentase 0%: naikkan persentasenya atau tandai Gagal');return}
  const e={id:uid(),qid:q.id,name:q.name,tier:q.tier,bx:q.xp,type:q.type,xp:fail?0:pts(q),at:Date.now(),res:fail?'fail':'done',pct:p};
- const r0=rankName();S.log.push(e);q.doneAt=e.at;q.doneLog=e.id;q.res=fail?'fail':null;if(!fail)q.pct=p;save();render();
- toast((fail?`Gagal: ${q.name}`:`Selesai${p<100?' '+p+'%':''}: ${q.name} (+${e.xp} XP)`)+(!fail&&rankName()!==r0?` Naik rank: ${rankName()}!`:''))}
-function undo(id){const q=get(id);if(!q)return;S.log=S.log.filter(l=>l.id!==q.doneLog);q.doneAt=q.doneLog=q.res=null;save();render()}
+ const r0=rankName();S.log.push(e);q.doneAt=e.at;q.doneLog=e.id;q.res=fail?'fail':null;if(!fail)q.pct=p;const un=unlock(q,fail?'fail':'done',e.id);save();render();
+ toast((fail?`Gagal: ${q.name}`:`Selesai${p<100?' '+p+'%':''}: ${q.name} (+${e.xp} XP)`)+(!fail&&rankName()!==r0?` Naik rank: ${rankName()}!`:'')+(un.length?'. Quest baru muncul: '+lst(un.map(x=>x.name)):''))}
+function undo(id){const q=get(id);if(!q)return;const lg=q.doneLog;S.log=S.log.filter(l=>l.id!==lg);q.doneAt=q.doneLog=q.res=null;
+ S.quests.forEach(b=>{if(lg&&b.ulBy===lg){b.ulBy=null;if(!b.doneAt)b.lk=true}});save();render()}      // batal selesai: quest yang tadi dimunculkan terkunci lagi
 const noteH=n=>`<div class="note" data-nid="${n.id}"><textarea rows="2" placeholder="Tulis catatan…" aria-label="Note">${esc(n.text)}</textarea><button data-act="delnote" aria-label="Hapus note">✕</button><small>Diedit ${fmtDT(n.ts)}</small></div>`;
 const ciH=(i,off)=>`<div class="ci" data-cid="${i.id}"><input type="checkbox" ${i.d?'checked':''} ${off?'disabled':''} aria-label="Item selesai"><input class="ct" value="${esc(i.t)}" placeholder="Tulis item…" ${off?'disabled':''} aria-label="Item checklist">${off?'':'<button data-act="delci" aria-label="Hapus item">✕</button>'}</div>`;
 function progH(q,s){const on=s==='on',cl=`<h4>Checklist</h4><div id="cls">${q.cl.map(i=>ciH(i,!on)).join('')}</div>${on?'<button class="ghost" data-act="addci">+ Tambah item</button>':''}`;
- if(s==='wait'||s==='end')return q.cl.length?cl:'';
+ if(s==='wait'||s==='end'||s==='lock')return q.cl.length?cl:'';
  return `<h4>Progres</h4><div class="prog"><div class="ph"><b id="pv"></b><span id="px"></span></div>
 <input type="range" id="pr" min="0" max="100" step="1" ${on?'':'disabled'} aria-label="Persentase selesai">
 ${on?'<div class="presets"><button data-pct="25">25%</button><button data-pct="50">50%</button><button data-pct="75">75%</button><button data-pct="100">100%</button></div>':''}</div>${on||q.cl.length?cl:''}`}
 function syncProg(){const q=get(ui.d),pv=$('#pv');if(!q||!pv)return;const p=eff(q);
  pv.textContent=p+'%';$('#px').textContent=status(q)==='fail'?'Gagal, tanpa poin':'Poin: +'+pts(q)+' dari '+q.xp;$('#pr').value=p;
  const ob=$('#okb');if(ob)ob.disabled=p<=0}
+const metaQ=(q,s,e)=>{const l=S.log.filter(x=>x.qid===q.id),ok=l.filter(x=>x.res!=='fail'),last=ok.reduce((m,x)=>Math.max(m,x.at),0),r=q.req&&get(q.req.id);
+ const t=s==='lock'?'Quest Dimulai: setelah "'+esc(r?r.name:'?')+'" '+OUT[q.req.on]+'<br>Quest Berakhir: '+(q.dl.k==='after'?'dihitung sejak quest muncul':q.dl.k==='custom'?fmtDT(q.dl.at):'tanpa batas waktu')
+  :'Quest Dimulai: '+fmtDT(q.cs)+'<br>Quest Berakhir: '+(e===Infinity?'tanpa batas waktu':fmtDT(e));
+ return `<p class="meta">${t}${l.length?'<br>Riwayat: '+ok.length+' selesai'+(l.length>ok.length?', '+(l.length-ok.length)+' gagal':'')+(last?', terakhir '+fmtDT(last):''):''}</p>`};
+const chainH=q=>{const r=q.req&&get(q.req.id),nx=S.quests.filter(b=>b.req&&b.req.id===q.id),lk=x=>`<button class="lnk" data-act="goq" data-q="${x.id}">${esc(x.name)}</button>`;
+ return r||nx.length?`<h4>Rantai quest</h4><div class="chain">${r?`<p>Muncul setelah ${lk(r)} ${OUT[q.req.on]}</p>`:''}${nx.length?`<p>Membuka: ${nx.map(b=>lk(b)+' (saat '+OUT[b.req.on]+')').join(', ')}</p>`:''}</div>`:''};
 function openDetail(id){const q=get(id);if(!q)return;ui.d=id;const s=status(q),e=endAt(q);
  const btn={on:'<button class="fb" data-act="fail">Gagal</button><button class="pri" id="okb" data-act="done">Selesai</button>',
   done:'<button class="pri" data-act="undo">Batalkan selesai</button>',fail:'<button class="pri" data-act="undo">Batalkan gagal</button>',
-  wait:'<button class="pri" disabled>Belum dimulai</button>',end:'<button class="pri" disabled>Sudah berakhir</button>'}[s];
+  wait:'<button class="pri" disabled>Belum dimulai</button>',lock:'<button class="pri" disabled>Terkunci</button>',end:'<button class="pri" disabled>Sudah berakhir</button>'}[s];
  $('#dd').innerHTML=`<div class="dh" style="--t:${hue(q.tier)}">${tb(q.tier,'','cursor:default;')}<h2>${esc(q.name)}</h2><button class="ic" data-close aria-label="Tutup">✕</button></div>
 <p class="desc">${q.desc?esc(q.desc):'<i>Tanpa deskripsi</i>'}</p>
 <div class="chips">${chips(q)}</div>
-<p class="meta">Quest Dimulai: ${fmtDT(q.cs)}<br>Quest Berakhir: ${e===Infinity?'tanpa batas waktu':fmtDT(e)}</p>
-${progH(q,s)}
+${metaQ(q,s,e)}
+${chainH(q)}${progH(q,s)}
 <h4>Catatan</h4><div id="notes">${q.notes.map(noteH).join('')}</div><button class="ghost" data-act="addnote">+ Tambah note</button>
-<menu><button class="danger" data-act="del">Hapus</button><button data-act="edit">Edit</button><span class="sp"></span>${btn}</menu>`;
- $('#dd').showModal();syncProg()}
+<menu><button class="danger" data-act="del">Hapus</button><button data-act="edit">Edit</button><button data-act="dup">Duplikat</button><button class="tmb" data-act="timer" data-idle="⏱ Timer">⏱ Timer</button><span class="sp"></span>${btn}</menu>`;
+ if(!$('#dd').open)$('#dd').showModal();syncProg();tDraw()}
 const closeD=()=>{const d=$('#dd');if(d.open)d.close()};
 let tm;$('#dd').addEventListener('input',e=>{const q=get(ui.d),t=e.target;if(!q)return;
  if(t.id==='pr'){q.pct=+t.value;syncProg()}
@@ -388,8 +417,12 @@ function fillTf(){const el=$('#tf'),cur=el.value,ts=[...new Set(S.quests.map(q=>
 fillTf();
 F.addEventListener('click',e=>{const b=e.target.closest('[data-days]');if(!b)return;
  document.querySelectorAll('#dchips input').forEach(c=>c.checked=b.dataset.days.includes(c.value));sync()});
+function fillRq(q){const ex=new Set(q?[q.id,...kids(q.id)]:[]);                       // pemicu: bukan dirinya & bukan quest yang menunggunya (hindari lingkaran)
+ F.rq.innerHTML='<option value="">Langsung muncul (tanpa syarat)</option>'+S.quests.filter(x=>!ex.has(x.id)).sort((x,y)=>x.name.localeCompare(y.name,'id')).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
+ F.rq.value=q&&q.req?q.req.id:'';F.ro.value=q&&q.req?q.req.on:'done'}
 function sync(){const on=!!document.querySelector('#dchips input:checked'),k=F.dk.value;
  $('#evl').hidden=F.ty.value!=='custom'||on;$('#afl').hidden=k!=='after';$('#dtl').hidden=k!=='custom';F.dt.required=k==='custom';
+ $('#rol').hidden=!F.rq.value;$('#rqh').textContent=F.rq.value?'Quest ini terkunci dan tersembunyi dari daftar utama sampai quest itu '+OUT[F.ro.value]+'. Jika quest ini berulang, ia terkunci lagi di setiap siklus baru. Lihat lewat filter "Terkunci".':'Isi supaya quest ini baru muncul setelah quest lain selesai atau gagal.';
  $('#dkh').textContent=k==='after'?'Dihitung sejak quest dimulai dan berlaku di setiap pengulangan. Tanpa hari di Quest Dimulai, quest dimulai sesuai type (Daily tiap hari 00.00, Weekly tiap Senin 00.00, Monthly tiap tanggal 1).'
   :k==='custom'?'Quest berakhir pada tanggal ini. Quest yang berulang tidak dimulai lagi setelahnya.':'Quest tetap ada sampai kamu menyelesaikannya.'}
 function openForm(q){ui.edit=q?q.id:null;$('#qt').textContent=q?'Edit quest':'Quest baru';
@@ -397,7 +430,7 @@ function openForm(q){ui.edit=q?q.id:null;$('#qt').textContent=q?'Edit quest':'Qu
  F.dk.value=q?q.dl.k:'none';F.dn.value=q?q.dl.n:1;F.du.value=q?q.dl.u:'d';F.dt.value=q&&q.dl.k==='custom'?loc(q.dl.at):'';
  F.tm.value=q&&q.sch?q.sch.time:'08:00';F.st.value=q&&q.start?loc(q.start):'';
  document.querySelectorAll('#dchips input').forEach(c=>c.checked=!!(q&&q.sch&&q.sch.days.includes(+c.value)));
- sync();xpHint();$('#qd').showModal();F.nm.focus()}
+ fillRq(q);sync();xpHint();$('#qd').showModal();F.nm.focus()}
 F.addEventListener('change',sync);
 F.addEventListener('input',e=>{if(e.target===F.xp)xpHint()});
 F.addEventListener('submit',e=>{e.preventDefault();const name=F.nm.value.trim();if(!name)return;
@@ -407,18 +440,23 @@ F.addEventListener('submit',e=>{e.preventDefault();const name=F.nm.value.trim();
   start=F.st.value?new Date(F.st.value).getTime():null,
   dl={k,at:k==='custom'?new Date(F.dt.value).getTime():null,n:num(F.dn.value,1,9999,1),u:F.du.value};
  const pool=old?[...old.cl]:[],cl=F.ck.value.split('\n').map(x=>x.trim()).filter(Boolean).slice(0,100).map(t=>{const k=pool.findIndex(i=>i.t===t);return k>=0?pool.splice(k,1)[0]:{id:uid(),t:t.slice(0,200),d:false}});
- const xp=num(F.xp.value,1,XMAX,10),data={name,cl,desc:F.ds.value.trim(),xp,tier:tierOf(xp),type:F.ty.value,every:F.ty.value==='custom'?num(F.ev.value,0,3650,0):0,dl,sch,start};
- if(old){const od=old.dl,chg=od.k!==dl.k||od.n!==dl.n||od.u!==dl.u||od.at!==dl.at;Object.assign(old,data);
+ const rq=F.rq.value,req=rq&&get(rq)&&rq!==ui.edit&&!cyc(ui.edit,rq)?{id:rq,on:F.ro.value}:null,
+  xp=num(F.xp.value,1,XMAX,10),data={name,cl,desc:F.ds.value.trim(),xp,tier:tierOf(xp),type:F.ty.value,every:F.ty.value==='custom'?num(F.ev.value,0,3650,0):0,dl,sch,start,req};let nq;
+ if(old){const od=old.dl,chg=od.k!==dl.k||od.n!==dl.n||od.u!==dl.u||od.at!==dl.at,pr=old.req;Object.assign(old,data);
   if(old.cs>n||(start&&start>n))old.cs=firstStart(old,n);                  // belum dimulai / awal ditunda: hitung ulang awal quest
-  else if(chg&&k==='after'&&endAt(old)<=n)old.cs=n}                         // hitung mundur baru yang sudah lewat: mulai dihitung dari sekarang
- else{const q={id:uid(),notes:[],created:n,doneAt:null,doneLog:null,res:null,pct:null,...data};q.cs=firstStart(q,n);S.quests.push(q)}
- save();$('#qd').close();render()});
+  else if(chg&&k==='after'&&endAt(old)<=n)old.cs=n;                         // hitung mundur baru yang sudah lewat: mulai dihitung dari sekarang
+  if(!req){if(old.lk)old.cs=firstStart(old,n);old.lk=false;old.ulBy=null}   // syarat dihapus: quest langsung muncul
+  else if(!pr||pr.id!==req.id||pr.on!==req.on){old.lk=!reqMet(old);old.ulBy=null;if(!old.lk&&!old.doneAt)old.cs=firstStart(old,n)}
+  nq=old}
+ else{const q={id:uid(),notes:[],created:n,doneAt:null,doneLog:null,res:null,pct:null,ulBy:null,xd:null,...data};q.cs=firstStart(q,n);q.lk=!!req&&!reqMet(q);S.quests.push(q);nq=q}
+ save();$('#qd').close();render();
+ if(status(nq)==='lock')toast('Terkunci sampai "'+get(req.id).name+'" '+OUT[req.on]+'. Lihat lewat filter Terkunci.')});
 
 /* ---------- export / import ---------- */
 function dlFile(name,obj){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)],{type:'application/json'}));
  a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2e3)}
 const stamp=()=>new Date().toISOString().slice(0,10),meta=k=>({app:'quests',kind:k,v:2,exported:new Date().toISOString()});
-const exportQ=()=>{dlFile(`quests-${stamp()}.json`,{...meta('quests'),data:S.quests.map(({doneAt,doneLog,cs,res,pct,...q})=>({...q,cl:q.cl.map(({id,t})=>({id,t}))}))});toast('Quests berhasil di-export')};
+const exportQ=()=>{dlFile(`quests-${stamp()}.json`,{...meta('quests'),data:S.quests.map(({doneAt,doneLog,cs,res,pct,lk,ulBy,xd,...q})=>({...q,cl:q.cl.map(({id,t})=>({id,t}))}))});toast('Quests berhasil di-export')};
 const exportP=()=>{dlFile(`progres-${stamp()}.json`,{...meta('progress'),log:S.log,profile:S.profile,done:Object.fromEntries(S.quests.filter(q=>q.doneAt).map(q=>[q.id,[q.doneAt,q.doneLog,q.res,q.pct]]))});toast('Progres berhasil di-export')};
 const exportN=()=>{dlFile(`note-${stamp()}.json`,{...meta('notes'),data:S.notes});toast('Note berhasil di-export')};
 const exportA=()=>{dlFile(`quests-semua-data-${stamp()}.json`,{...meta('all'),quests:S.quests,log:S.log,notes:S.notes,profile:S.profile});
@@ -430,7 +468,8 @@ const sk=x=>JSON.stringify([x.sch&&x.sch.days,x.sch&&x.sch.time,x.start]);
 $('#file').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;
  try{const d=JSON.parse(await file.text());if(d.app!=='quests'||d.kind!==ui.imp)throw 0;const rep=$('#mode').value==='replace',k=ui.imp;let msg='';
   const arr=(v,f)=>(Array.isArray(v)?v:[]).map(f).filter(Boolean);
-  const upQ=n=>{const o=get(n.id);if(o){n.cl.forEach(i=>{const m=o.cl.find(x=>x.t===i.t);if(m)i.d=m.d});Object.assign(o,n,{doneAt:o.doneAt,doneLog:o.doneLog,res:o.res,pct:o.pct,cs:sk(o)===sk(n)?o.cs:n.cs})}else S.quests.push(n)};
+  const upQ=n=>{const o=get(n.id);if(o){n.cl.forEach(i=>{const m=o.cl.find(x=>x.t===i.t);if(m)i.d=m.d});const same=JSON.stringify(o.req)===JSON.stringify(n.req);
+   Object.assign(o,n,{doneAt:o.doneAt,doneLog:o.doneLog,res:o.res,pct:o.pct,cs:sk(o)===sk(n)?o.cs:n.cs,lk:same?o.lk:null,ulBy:same?o.ulBy:null,xd:o.xd})}else S.quests.push(n)};
   const addL=log=>{const ids=new Set(S.log.map(l=>l.id));log.forEach(l=>ids.has(l.id)||S.log.push(l))};
   const upN=list=>list.forEach(n=>{const i=S.notes.findIndex(x=>x.id===n.id);if(i<0)S.notes.push(n);else S.notes[i]=n});
   if(k==='quests'){const list=arr(d.data,q=>cleanQ(q));if(rep)S.quests=list;else list.forEach(upQ);msg=list.length+' quest berhasil di-import'}
@@ -441,9 +480,36 @@ $('#file').addEventListener('change',async e=>{const file=e.target.files[0];if(!
   else{const log=arr(d.log,cleanL);if(rep)S.log=log;else addL(log);if(d.profile)S.profile=cleanP(d.profile);
    const m=d.done&&typeof d.done==='object'?d.done:{};
    S.quests.forEach(q=>{const x=m[q.id];if(Array.isArray(x)){const at=num(x[0],0,9e15,0);if(at&&(rep||at>(q.doneAt||0))){q.doneAt=at;q.doneLog=sid(x[1])||null;q.res=x[2]==='fail'?'fail':null;if(fin(x[3]))q.pct=num(x[3],0,100,null)}}else if(rep)q.doneAt=q.doneLog=q.res=null});
-   msg=log.length+' catatan progres berhasil di-import'}
-  save();render();toast(msg)}catch(err){toast('File tidak cocok untuk jenis import ini')}
+   S.quests.forEach(b=>{if(b.lk&&reqMet(b))wake(b)});msg=log.length+' catatan progres berhasil di-import'}
+  fixReq();save();render();toast(msg)}catch(err){toast('File tidak cocok untuk jenis import ini')}
  e.target.value=''});
+
+/* ---------- timer: hitung mundur & interval (istirahat antar set, HIIT) ---------- */
+const TM={ph:[],i:0,end:0,left:0,on:false,ac:null,wl:null,iv:null,msg:''};
+const mmss=ms=>{const s=Math.max(0,Math.ceil(ms/1000));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')};
+const tLeft=()=>TM.on?TM.end-Date.now():TM.left;
+function beep(f,d,at){try{const c=TM.ac;if(!c)return;const o=c.createOscillator(),g=c.createGain();o.frequency.value=f;g.gain.value=.25;o.connect(g);g.connect(c.destination);const t=c.currentTime+(at||0);o.start(t);o.stop(t+d)}catch(e){}}
+function cue(end){try{navigator.vibrate&&navigator.vibrate(end?[250,120,250,120,250]:200)}catch(e){}if(end)[0,.3,.6].forEach(t=>beep(988,.2,t));else beep(740,.25)}
+async function wlock(){try{if(navigator.wakeLock&&!TM.wl){TM.wl=await navigator.wakeLock.request('screen');TM.wl.addEventListener('release',()=>{TM.wl=null})}}catch(e){}}   // layar tetap menyala selama timer jalan
+const wfree=()=>{try{TM.wl&&TM.wl.release()}catch(e){}TM.wl=null};
+function tDraw(){const ph=TM.ph[TM.i],l=tLeft();
+ $('#tclock').textContent=ph?mmss(l):'00:00';
+ $('#tph').textContent=ph?ph.n+(ph.R?' · ronde '+ph.r+' dari '+ph.R:'')+(TM.on?'':' · dijeda'):TM.msg||'Pilih durasi atau atur interval.';
+ $('#tpp').hidden=!ph;$('#tpp').textContent=TM.on?'Jeda':'Lanjut';
+ document.querySelectorAll('.tmb').forEach(b=>{b.textContent=ph?'⏱ '+mmss(l):b.dataset.idle;b.classList.toggle('run',!!ph)})}
+const tRun=()=>{clearInterval(TM.iv);TM.iv=setInterval(tTick,250)};
+function tStart(ph){if(!ph.length)return;TM.ph=ph;TM.i=0;TM.on=true;TM.msg='';TM.end=Date.now()+ph[0].d;
+ try{TM.ac=TM.ac||new(window.AudioContext||window.webkitAudioContext)();TM.ac.resume&&TM.ac.resume()}catch(e){}tRun();wlock();tDraw()}
+function tPause(){if(!TM.ph.length)return;if(TM.on){TM.left=TM.end-Date.now();TM.on=false;clearInterval(TM.iv);wfree()}else{TM.on=true;TM.end=Date.now()+TM.left;tRun();wlock()}tDraw()}
+function tReset(){TM.on=false;clearInterval(TM.iv);TM.ph=[];TM.i=0;TM.msg='';wfree();tDraw()}
+function tTick(){if(!TM.on)return;const now=Date.now();let mv=false;
+ while(TM.on&&now>=TM.end){
+  if(TM.i+1>=TM.ph.length){TM.on=false;clearInterval(TM.iv);TM.ph=[];TM.i=0;TM.msg='Timer selesai';wfree();cue(true);toast('Timer selesai');tDraw();return}
+  mv=true;TM.i++;TM.end+=TM.ph[TM.i].d}
+ if(mv)cue(false);tDraw()}
+const cd=s=>[{n:'Hitung mundur',d:s*1000}];
+const ivPlan=(w,r,n)=>{const p=[];for(let i=1;i<=n;i++){p.push({n:'Kerja',d:w*1000,r:i,R:n});if(r>0&&i<n)p.push({n:'Istirahat',d:r*1000,r:i,R:n})}return p};
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&TM.on){tTick();wlock()}});
 
 /* ---------- event ---------- */
 const A={add:()=>openForm(),open:id=>openDetail(id),done:id=>{const q=get(id);if(q&&!$('#dd').open&&clItems(q).length){openDetail(id);return}finish(id,false);closeD()},
@@ -451,10 +517,16 @@ const A={add:()=>openForm(),open:id=>openDetail(id),done:id=>{const q=get(id);if
  addci:id=>{const q=get(id);q.cl.push({id:uid(),t:'',d:false});q.pct=null;save();const c=$('#cls');c.insertAdjacentHTML('beforeend',ciH(q.cl.at(-1),false));syncProg();c.lastElementChild.querySelector('.ct').focus()},
  delci:(id,b)=>{const q=get(id),el=b.closest('.ci');q.cl=q.cl.filter(i=>i.id!==el.dataset.cid);q.pct=null;el.remove();save();syncProg()},undo:id=>{undo(id);closeD()},
  edit:id=>{closeD();openForm(get(id))},
- del:id=>{if(confirm('Hapus quest ini? Riwayat di Log tetap tersimpan.')){S.quests=S.quests.filter(q=>q.id!==id);save();closeD();render()}},
+ del:id=>{if(confirm('Hapus quest ini? Riwayat di Log tetap tersimpan.')){S.quests=S.quests.filter(q=>q.id!==id);dropReq(id);save();closeD();render()}},
  addnote:id=>{const q=get(id);q.notes.push({id:uid(),text:'',ts:Date.now()});save();const n=$('#notes');n.insertAdjacentHTML('beforeend',noteH(q.notes.at(-1)));n.lastElementChild.querySelector('textarea').focus()},
  delnote:(id,b)=>{const q=get(id),el=b.closest('.note');q.notes=q.notes.filter(n=>n.id!==el.dataset.nid);el.remove();save()},
  prof:()=>openProf(),
+ goq:(_,b)=>{const t=get(b.dataset.q);if(!t)return;const p=get(ui.d);if(p){p.cl=p.cl.filter(i=>i.t.trim());save()}openDetail(t.id)},
+ dup:id=>{const q=get(id);if(!q)return;const c=cleanQ({...q,id:uid(),name:q.name+' (salinan)',created:Date.now(),cs:null,notes:[],cl:q.cl.map(i=>({id:uid(),t:i.t}))});
+  c.lk=!!c.req&&!reqMet(c);S.quests.push(c);save();closeD();render();toast('Quest diduplikasi: '+c.name)},
+ timer:()=>{const d=$('#td');tDraw();if(!d.open)d.showModal()},tset:(_,b)=>tStart(cd(+b.dataset.s)),
+ tiv:(_,b)=>{const[w,r,n]=b.dataset.iv.split('-');$('#tiw').value=w;$('#tir').value=r;$('#tin').value=n},
+ tgo:()=>tStart(ivPlan(num($('#tiw').value,1,3600,20),num($('#tir').value,0,3600,10),num($('#tin').value,1,99,8))),tpause:()=>tPause(),treset:()=>tReset(),
  upd:async()=>{try{for(const k of await caches.keys())await caches.delete(k);for(const r of await navigator.serviceWorker.getRegistrations())await r.unregister()}catch(e){}location.reload()},
  exq:exportQ,imq:()=>pick('quests'),exp:exportP,imp:()=>pick('progress'),exn:exportN,imn:()=>pick('notes'),exa:exportA,ima:()=>pick('all'),
  nadd:()=>openNote(),nopen:(_,b)=>openNote(b.closest('[data-nid]').dataset.nid),
@@ -491,5 +563,8 @@ if('serviceWorker' in navigator){const had=!!navigator.serviceWorker.controller;
  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had&&!rl){rl=true;location.reload()}});
  addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
 const ve=$('#ver');if(ve)ve.textContent=VER;
+function shortcut(){try{const p=new URLSearchParams(location.search).get('a');if(!p)return;history.replaceState(null,'',location.pathname+location.hash);   // jalan pintas dari ikon aplikasi (tekan lama)
+ if(p==='add')openForm();else if(p==='note'){show('notes');openNote()}else if(p==='timer')A.timer();else if(p==='prof')show('log')}catch(e){}}
+if(fixReq())save();
 renderBk();
-render();show('quests');
+render();show('quests');shortcut();
