@@ -17,6 +17,7 @@
   "shortcuts": [
     {"name": "Quest baru", "short_name": "Quest", "url": "./?a=add", "icons": [{"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"}]},
     {"name": "Note baru", "short_name": "Note", "url": "./?a=note", "icons": [{"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"}]},
+    {"name": "Quest Flow", "short_name": "Flow", "url": "./?a=flow", "icons": [{"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"}]},
     {"name": "Timer", "short_name": "Timer", "url": "./?a=timer", "icons": [{"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"}]}
   ]
 }

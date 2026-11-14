@@ -204,3 +204,23 @@ dialog[open]{animation:sheet .22s ease-out}dialog[open]::backdrop{animation:fade
 .tclock{margin:14px 0 2px;text-align:center;font:700 4.4rem/1.1 var(--ser);font-variant-numeric:tabular-nums}
 .tph{margin:0 0 10px;min-height:1.4em;text-align:center;color:var(--mut)}
 #td .btns{margin-bottom:4px}
+
+/* v13: ID quest, alur (flow), timer tersimpan */
+.qid{font:500 .7rem ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--mut);white-space:nowrap}
+.chip.id{border:0;min-height:0;font:500 .72rem ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;cursor:pointer}
+.dur{display:grid;grid-template-columns:1fr 120px;gap:8px;margin-top:6px}
+#qf details{margin-top:14px;border:1px solid var(--ln);border-radius:12px;padding:0 12px 12px}
+#qf summary{min-height:46px;display:flex;align-items:center;cursor:pointer;font-weight:600}
+#rqw select,#rol select{margin-top:6px}
+.fhd{display:flex;gap:12px;align-items:flex-start;padding:16px 0 2px}.fhd>div{flex:1;min-width:0}
+.fhd h2{margin:0 0 4px;font:700 1.3rem var(--ser)}.fhd .hint{margin:0}.fhd button{flex:none}
+.fc{background:var(--sf);border:1px solid var(--ln);border-radius:16px;padding:12px 14px;margin:12px 0}
+.fh{display:flex;gap:8px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+.fh b{font:600 1.02rem var(--ser);overflow-wrap:anywhere}.fh .chips{margin-top:0}
+.mini{min-height:30px;padding:2px 10px;font-size:.78rem;border-radius:99px}
+.fl{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;width:100%;margin-top:8px;padding:10px 12px;text-align:left;min-height:46px;border-radius:12px}
+.fl .fw,.fl .fd{color:var(--mut);font-size:.82rem}.fl .fa{font-weight:600;overflow-wrap:anywhere}.fl .chip{margin-left:auto}
+#flow{padding-bottom:90px}
+.ts{display:flex;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--ln)}
+.ts .tn{flex:1;min-width:0}.ts .tn b{overflow-wrap:anywhere}.ts .tn small{display:block;color:var(--mut);font-size:.78rem}
+.ts button{flex:none;width:44px;padding:0}.ts .x{color:var(--bad)}

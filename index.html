@@ -51,6 +51,11 @@
     <div id="list" class="list"></div>
   </section>
 
+  <section id="v-flow" hidden>
+    <div class="fhd"><div><h2>Quest Flow</h2><p class="hint">Atur kapan quest muncul. Saat quest A selesai, quest B muncul setelah jeda yang kamu tentukan. Alur boleh berputar (A lalu B lalu A) dan quest boleh muncul lagi sendiri.</p></div><button class="pri" data-act="fadd">+ Alur baru</button></div>
+    <div id="flow"></div>
+  </section>
+
   <section id="v-notes" hidden>
     <div class="tools">
       <input type="search" id="nq" placeholder="Cari note…" aria-label="Cari note">
@@ -85,20 +90,22 @@
   </section>
 
   <section id="v-data" hidden>
-    <div class="panel"><h2>Semua data</h2><p>Cadangan lengkap dalam satu file: quest beserta progresnya, log, note, dan profil.</p>
+    <div class="panel"><h2>Semua data</h2><p>Cadangan lengkap dalam satu file: quest beserta alur dan progresnya, log, note, timer, dan profil.</p>
       <div class="btns"><button class="pri" data-act="exa">Export Semua Data</button><button data-act="ima">Import Semua Data</button></div>
       <p class="hint" id="bk"></p></div>
     <div class="panel"><h2>Mode import</h2><p>Berlaku untuk semua tombol import di halaman ini.</p>
       <select id="mode" aria-label="Mode import"><option value="merge">Gabungkan dengan data yang ada</option><option value="replace">Ganti data yang ada</option></select></div>
-    <div class="panel"><h2>Quests</h2><p>Daftar quest beserta note, checklist, dan jadwalnya.</p>
+    <div class="panel"><h2>Quests</h2><p>Daftar quest beserta ID, note, checklist, jadwal, dan alurnya.</p>
       <div class="btns"><button class="pri" data-act="exq">Export Quests</button><button data-act="imq">Import Quests</button></div></div>
     <div class="panel"><h2>Progres</h2><p>Riwayat quest selesai, XP, profil, dan status selesai saat ini.</p>
       <div class="btns"><button class="pri" data-act="exp">Export Progres</button><button data-act="imp">Import Progres</button></div></div>
     <div class="panel"><h2>Note</h2><p>Semua note beserta tag dan waktu tampilnya.</p>
       <div class="btns"><button class="pri" data-act="exn">Export Note</button><button data-act="imn">Import Note</button></div></div>
+    <div class="panel"><h2>Timer</h2><p>Timer tersimpan: hitung mundur dan interval.</p>
+      <div class="btns"><button class="pri" data-act="ext">Export Timer</button><button data-act="imt">Import Timer</button></div></div>
     <div class="panel"><h2>Aplikasi</h2><p>Jika tampilan belum berubah setelah update, perbarui aplikasi. Data tidak terhapus.</p>
       <button data-act="upd">Perbarui aplikasi</button></div>
-    <div class="panel"><h2>Reset</h2><p>Hapus semua quest, note, dan progres dari perangkat ini.</p>
+    <div class="panel"><h2>Reset</h2><p>Hapus semua quest, note, timer, dan progres dari perangkat ini.</p>
       <button class="danger" data-act="reset">Hapus semua data</button></div>
     <input type="file" id="file" accept=".json,application/json" hidden>
     <p class="foot">Data disimpan di perangkat ini. Versi aplikasi: <b id="ver">lama</b></p>
@@ -108,6 +115,7 @@
 <button class="fab" id="fab" data-act="add" aria-label="Tambah quest">+</button>
 <nav class="nav">
   <button data-nav="quests" class="on">Quests</button>
+  <button data-nav="flow">Flow</button>
   <button data-nav="notes">Note</button>
   <button data-nav="log">Profil</button>
   <button data-nav="data">Data</button>
@@ -116,6 +124,8 @@
 <dialog id="qd"><form id="qf" autocomplete="off">
   <h2 id="qt">Quest baru</h2>
   <label>Nama<input name="nm" required maxlength="120"></label>
+  <label>ID quest<input name="qid" maxlength="40" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="otomatis dari nama"></label>
+  <p class="hint">Dipakai di tab Flow dan file import. Huruf kecil, angka, - dan _.</p>
   <label>Deskripsi<textarea name="ds" rows="3" maxlength="1000"></textarea></label>
   <label>Checklist (opsional, satu item per baris)<textarea name="ck" rows="3" maxlength="3000" placeholder="Contoh:&#10;Pemanasan&#10;Latihan inti&#10;Pendinginan"></textarea></label>
   <div class="two">
@@ -150,15 +160,40 @@
     <label id="dtl" hidden>Berakhir pada<input name="dt" type="datetime-local"></label>
     <p class="hint" id="dkh"></p>
   </div>
-  <div id="rqs" role="group" aria-label="Muncul setelah quest lain">
-    <span class="lbl">Muncul setelah quest lain</span>
-    <select name="rq" aria-label="Quest pemicu"></select>
-    <div id="rol" hidden><span class="lbl">Quest ini muncul saat quest itu</span><select name="ro" aria-label="Quest ini muncul saat quest itu"><option value="done">Selesai</option><option value="fail">Gagal atau waktu habis</option><option value="any">Selesai atau gagal</option></select></div>
-    <p class="hint" id="rqh"></p>
-  </div>
+  <details id="fx">
+    <summary>Alur dan muncul lagi</summary>
+    <span class="lbl">Muncul lagi setelah selesai</span>
+    <div class="dur"><input name="rn" type="number" min="0" max="99999" value="0" inputmode="numeric" aria-label="Jeda muncul lagi"><select name="ru" aria-label="Satuan jeda muncul lagi"><option value="s">Detik</option><option value="m" selected>Menit</option><option value="h">Jam</option><option value="d">Hari</option></select></div>
+    <p class="hint">Isi 0 untuk mati. Setelah quest selesai, quest ini muncul lagi setelah jeda ini dan menggantikan jadwal type-nya. Jika quest punya jadwal hari dan jam, ia muncul di jadwal terdekat setelah jeda.</p>
+    <span class="lbl">Item checklist muncul lagi setelah dicentang</span>
+    <div class="dur"><input name="cn" type="number" min="0" max="99999" value="0" inputmode="numeric" aria-label="Jeda item checklist"><select name="cu" aria-label="Satuan jeda item checklist"><option value="s">Detik</option><option value="m" selected>Menit</option><option value="h">Jam</option><option value="d">Hari</option></select></div>
+    <p class="hint">Isi 0 untuk mati. Item yang dicentang kembali kosong setelah jeda ini.</p>
+    <div id="rqw">
+      <span class="lbl">Muncul setelah quest lain</span>
+      <select name="rq" aria-label="Quest pemicu"></select>
+      <div id="rol" hidden>
+        <span class="lbl">Saat quest itu</span>
+        <select name="ro" aria-label="Saat quest pemicu"><option value="done">Selesai</option><option value="fail">Gagal atau waktu habis</option><option value="any">Selesai atau gagal</option></select>
+        <span class="lbl">Muncul setelah jeda</span>
+        <div class="dur"><input name="rdn" type="number" min="0" max="99999" value="0" inputmode="numeric" aria-label="Jeda muncul"><select name="rdu" aria-label="Satuan jeda muncul"><option value="s">Detik</option><option value="m" selected>Menit</option><option value="h">Jam</option><option value="d">Hari</option></select></div>
+      </div>
+      <p class="hint" id="rqh"></p>
+    </div>
+    <p class="hint" id="rqm" hidden>Quest ini punya beberapa alur masuk. Atur lewat tab Flow.</p>
+  </details>
   <menu><button type="button" data-close>Batal</button><button class="pri">Simpan</button></menu>
 </form></dialog>
 <dialog id="dd"></dialog>
+<dialog id="fd"><form id="ff" autocomplete="off">
+  <h2 id="fht">Alur baru</h2>
+  <label>Quest pemicu<select name="fs"></select></label>
+  <label>Saat quest itu<select name="fo"><option value="done">Selesai</option><option value="fail">Gagal atau waktu habis</option><option value="any">Selesai atau gagal</option></select></label>
+  <label>Quest yang muncul<select name="ft"></select></label>
+  <div class="two"><label>Muncul setelah<input name="fn" type="number" min="0" max="99999" value="0" inputmode="numeric"></label><label>Satuan<select name="fu"><option value="s">Detik</option><option value="m" selected>Menit</option><option value="h">Jam</option><option value="d">Hari</option></select></label></div>
+  <p class="hint" id="fh"></p>
+  <div class="days" id="flw"><label><input type="checkbox" name="fl"><span>Quest yang muncul mulai terkunci</span></label></div>
+  <menu><button type="button" class="danger" id="fdel" data-act="fdel" hidden>Hapus</button><button type="button" id="fnowb" data-act="fnow" hidden>Munculkan sekarang</button><span class="sp"></span><button type="button" data-close>Batal</button><button class="pri">Simpan</button></menu>
+</form></dialog>
 <dialog id="pd"><form id="pf" autocomplete="off">
   <h2>Profil</h2>
   <label>Nama<input name="pn" maxlength="24" required></label>
@@ -227,16 +262,29 @@
 <dialog id="td">
   <div class="dh"><h2>Timer</h2><button class="ic" data-close aria-label="Tutup">✕</button></div>
   <div class="tclock" id="tclock" role="timer">00:00</div>
-  <p class="tph" id="tph" aria-live="polite">Pilih durasi atau atur interval.</p>
+  <p class="tph" id="tph" aria-live="polite">Pilih timer tersimpan atau buat baru.</p>
   <div class="btns"><button id="tpp" data-act="tpause" hidden>Jeda</button><button data-act="treset">Reset</button></div>
-  <span class="lbl">Hitung mundur (langsung jalan)</span>
-  <div class="presets"><button data-act="tset" data-s="30">30 dtk</button><button data-act="tset" data-s="45">45 dtk</button><button data-act="tset" data-s="60">60 dtk</button><button data-act="tset" data-s="90">90 dtk</button><button data-act="tset" data-s="120">2 mnt</button><button data-act="tset" data-s="180">3 mnt</button></div>
-  <span class="lbl">Interval (kerja dan istirahat bergantian)</span>
-  <div class="two"><label>Kerja (dtk)<input id="tiw" type="number" min="1" max="3600" value="20" inputmode="numeric"></label><label>Istirahat (dtk)<input id="tir" type="number" min="0" max="3600" value="10" inputmode="numeric"></label></div>
-  <label>Jumlah ronde<input id="tin" type="number" min="1" max="99" value="8" inputmode="numeric"></label>
+  <span class="lbl">Tersimpan</span>
+  <div id="tsv"></div>
+  <span class="lbl">Mulai cepat</span>
+  <div class="presets"><button data-act="tset" data-s="30">30 dtk</button><button data-act="tset" data-s="45">45 dtk</button><button data-act="tset" data-s="60">60 dtk</button><button data-act="tset" data-s="90">90 dtk</button><button data-act="tset" data-s="120">2 mnt</button><button data-act="tset" data-s="300">5 mnt</button><button data-act="tset" data-s="600">10 mnt</button></div>
   <div class="presets"><button data-act="tiv" data-iv="20-10-8">20:10 x8</button><button data-act="tiv" data-iv="30-30-6">30:30 x6</button><button data-act="tiv" data-iv="40-20-5">40:20 x5</button><button data-act="tiv" data-iv="60-30-4">60:30 x4</button></div>
-  <menu><button type="button" data-close>Tutup</button><button class="pri" data-act="tgo">Mulai interval</button></menu>
-  <p class="hint">Bunyi dan getar menandai pergantian. Layar dijaga menyala selama timer jalan. Timer tetap berjalan saat jendela ini ditutup.</p>
+  <span class="lbl">Buat atau ubah timer</span>
+  <div class="seg" id="tk" role="group" aria-label="Jenis timer"><button type="button" data-act="tkind" data-k="cd" class="on">Hitung mundur</button><button type="button" data-act="tkind" data-k="iv">Interval</button></div>
+  <div id="tcd">
+    <span class="lbl">Durasi</span>
+    <div class="dur"><input id="tdn" type="number" min="1" max="9999" value="5" inputmode="numeric" aria-label="Durasi"><select id="tdu" aria-label="Satuan durasi"><option value="s">Detik</option><option value="m" selected>Menit</option><option value="h">Jam</option></select></div>
+  </div>
+  <div id="tiv" hidden>
+    <span class="lbl">Kerja</span>
+    <div class="dur"><input id="twn" type="number" min="1" max="9999" value="20" inputmode="numeric" aria-label="Durasi kerja"><select id="twu" aria-label="Satuan kerja"><option value="s" selected>Detik</option><option value="m">Menit</option><option value="h">Jam</option></select></div>
+    <span class="lbl">Istirahat (0 = tanpa istirahat)</span>
+    <div class="dur"><input id="trn" type="number" min="0" max="9999" value="10" inputmode="numeric" aria-label="Durasi istirahat"><select id="tru" aria-label="Satuan istirahat"><option value="s" selected>Detik</option><option value="m">Menit</option><option value="h">Jam</option></select></div>
+    <label>Jumlah ronde<input id="trd" type="number" min="1" max="99" value="8" inputmode="numeric"></label>
+  </div>
+  <label>Nama (untuk menyimpan)<input id="tnm" maxlength="40" placeholder="contoh: Tabata, Plank, Istirahat set"></label>
+  <menu><button type="button" data-act="tsave">Simpan</button><button class="pri" data-act="tgo">Mulai</button></menu>
+  <p class="hint">Bunyi dan getar menandai pergantian. Timer tetap berjalan saat jendela ini atau aplikasi ditutup. Layar dijaga menyala untuk timer sampai 30 menit.</p>
 </dialog>
 <div id="toast" role="status"></div>
 <script src="app.js"></script>
